@@ -48,7 +48,7 @@ context-live-translator = "context_live_translator.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-context_live_translator = ["static/*.html"]
+context_live_translator = ["static/*.html", "static/*.gif"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

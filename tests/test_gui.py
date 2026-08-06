@@ -19,6 +19,7 @@ def test_gui_has_standalone_translation_tabs(monkeypatch, qcore_app) -> None:
     ]
     assert window.timeline.objectName() == "timeline"
     assert window.target_combo.findData("__custom__") >= 0
+    assert not window.windowIcon().isNull()
     window.controller.shutdown()
     window.deleteLater()
 

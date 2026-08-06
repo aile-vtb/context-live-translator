@@ -8,8 +8,9 @@ tagging a release.
 - Run `powershell -ExecutionPolicy Bypass -File scripts\build-release.ps1` from
   a clean working tree.
 - Confirm the generated ZIP contains `README_FIRST.md`, `setup.cmd`, `run.cmd`,
-  license files, locked requirements and `src`, but no `.git`, `.venv`, tests,
-  config, sessions, logs, runtime binaries or model weights.
+  the packaged `logo.gif`, license files, locked requirements and `src`, but no
+  `.git`, `.venv`, tests, config, sessions, logs, runtime binaries or model
+  weights.
 - Verify the generated `.sha256` file with `Get-FileHash`.
 - Download the uploaded asset from a draft GitHub Release and repeat the clean
   Windows installation from the downloaded ZIP, not from the checkout.
@@ -42,6 +43,12 @@ tagging a release.
   segments rather than a pre-ASR mix.
 - Unplug or disable one selected endpoint and confirm only that route stops,
   the other continues, and neither falls back to the Windows default microphone.
+
+## GUI identity
+
+- Confirm the logo appears in the main window title bar and Windows taskbar.
+- Confirm the app still starts when installed from the Release ZIP rather than
+  the Git checkout.
 
 ## Recognition and translation
 

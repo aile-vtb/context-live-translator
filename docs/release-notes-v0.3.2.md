@@ -35,6 +35,7 @@ ContextLiveTranslator-v0.3.2-Windows-Setup.zip
 - 初譯立即顯示，最近上下文可保守回修並更新原字幕。
 - GUI 字幕時間軸、session JSONL/SRT/TXT 輸出。
 - localhost OBS Browser Source 與 WebSocket 修訂同步。
+- 視窗標題列與 Windows 工作列使用 Context Live Translator logo。
 
 這是 alpha 版本。發布前後仍建議依 repository 中的
 `docs/manual-release-checklist.md` 完成實機驗證並回報硬體相容性問題。

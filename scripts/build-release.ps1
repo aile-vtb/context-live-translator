@@ -102,6 +102,17 @@ $forbiddenPatterns = @(
     '\.(?:pyc|pyo|gguf|safetensors|onnx|ct2)$'
 )
 $stagedFiles = Get-ChildItem -LiteralPath $stageRoot -Recurse -Force -File
+$requiredReleaseFiles = @(
+    "README_FIRST.md",
+    "setup.cmd",
+    "run.cmd",
+    "src\context_live_translator\static\logo.gif"
+)
+foreach ($relativePath in $requiredReleaseFiles) {
+    if (-not (Test-Path -LiteralPath (Join-Path $stageRoot $relativePath))) {
+        throw "Required release content is missing: $relativePath"
+    }
+}
 foreach ($item in $stagedFiles) {
     foreach ($pattern in $forbiddenPatterns) {
         if ($item.FullName -match $pattern) {

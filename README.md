@@ -1,5 +1,9 @@
 # Context Live Translator
 
+<p align="center">
+  <img src="src/context_live_translator/static/logo.gif" width="180" alt="Context Live Translator logo">
+</p>
+
 Context Live Translator 是一個 Windows 單機桌面程式：從明確選定的麥克風、
 音訊介面、虛擬輸入或 Windows 播放端點取得聲音，以本機 Whisper 辨識，
 再透過本機 `llama.cpp` 模型翻譯。每句會先快速顯示暫定譯文，後續句出現後，

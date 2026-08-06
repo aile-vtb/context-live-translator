@@ -60,6 +60,7 @@ from .models import (
     SegmentStatus,
     TranscriptSegment,
 )
+from .resources import application_icon
 
 STATUS_LABELS = {
     SegmentStatus.RECOGNIZED: "已辨識",
@@ -329,6 +330,7 @@ class MainWindow(QMainWindow):
         self.segment_items: dict[str, tuple[QListWidgetItem, SegmentCard]] = {}
         self._closing = False
         self.setWindowTitle(f"Context Live Translator v{__version__}")
+        self.setWindowIcon(application_icon())
         self.resize(1060, 820)
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)
