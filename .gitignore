@@ -1,0 +1,32 @@
+.venv/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Local settings, logs, and user sessions
+config.json
+sessions/
+logs/
+*.log
+.env
+.env.*
+
+# Local runtimes and model weights must never be committed
+runtime/
+models/
+*.gguf
+*.bin
+*.safetensors
+*.onnx
+*.ct2
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+

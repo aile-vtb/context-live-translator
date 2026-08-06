@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; connect-src ws: wss:; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>Context Live Translator Overlay</title>
+  <style>
+    :root {
+      --font-family: "Microsoft JhengHei";
+      --translation-size: 44px;
+      --source-size: 26px;
+      --text-color: #fff;
+      --source-color: #d1d5db;
+      --background: rgba(0, 0, 0, .68);
+      --outline-color: #000;
+      --outline-px: 2px;
+      --text-align: center;
+      --width: 90%;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: transparent;
+    }
+    #stage {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      justify-content: center;
+      padding: 4vh 3vw;
+      pointer-events: none;
+      font-family: var(--font-family), sans-serif;
+    }
+    #stage.top { align-items: flex-start; }
+    #stage.center { align-items: center; }
+    #stage.bottom { align-items: flex-end; }
+    #caption-stack {
+      width: var(--width);
+      padding: .55em .8em;
+      border-radius: .5em;
+      background: var(--background);
+      text-align: var(--text-align);
+    }
+    #caption-stack:empty { display: none; }
+    .segment {
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
+      animation: appear .16s ease-out;
+    }
+    .segment + .segment {
+      margin-top: .42em;
+      padding-top: .42em;
+      border-top: 1px solid rgba(255, 255, 255, .22);
+    }
+    .source {
+      margin-bottom: .12em;
+      color: var(--source-color);
+      font-size: var(--source-size);
+      line-height: 1.28;
+      font-weight: 600;
+    }
+    .route-label {
+      margin-bottom: .1em;
+      color: var(--source-color);
+      font-size: calc(var(--source-size) * .72);
+      line-height: 1.15;
+      font-weight: 700;
+      opacity: .9;
+    }
+    .translation {
+      color: var(--text-color);
+      font-size: var(--translation-size);
+      line-height: 1.24;
+      font-weight: 750;
+      text-shadow:
+        calc(var(--outline-px) * -1) 0 var(--outline-color),
+        var(--outline-px) 0 var(--outline-color),
+        0 calc(var(--outline-px) * -1) var(--outline-color),
+        0 var(--outline-px) var(--outline-color);
+    }
+    @keyframes appear {
+      from { opacity: 0; transform: translateY(.2em); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+  <main id="stage" class="bottom">
+    <section id="caption-stack" aria-live="polite"></section>
+  </main>
+  <script>
+    const stage = document.getElementById("stage");
+    const stack = document.getElementById("caption-stack");
+    const segments = new Map();
+    let order = [];
+    let style = {};
+    let lastSequence = 0;
+    const routeFilter = new URLSearchParams(location.search).get("route");
+
+    function setText(parent, className, value) {
+      let node = parent.querySelector(`.${className}`);
+      if (!node) {
+        node = document.createElement("div");
+        node.className = className;
+        parent.appendChild(node);
+      }
+      node.textContent = value || "";
+      return node;
+    }
+
+    function applyStyle(nextStyle) {
+      style = nextStyle || {};
+      const root = document.documentElement.style;
+      root.setProperty("--font-family", JSON.stringify(style.font_family || "Microsoft JhengHei"));
+      root.setProperty("--translation-size", `${style.translation_size || 44}px`);
+      root.setProperty("--source-size", `${style.source_size || 26}px`);
+      root.setProperty("--text-color", style.text_color || "#FFFFFF");
+      root.setProperty("--source-color", style.source_color || "#D1D5DB");
+      root.setProperty("--background", style.background || "rgba(0, 0, 0, 0.68)");
+      root.setProperty("--outline-color", style.outline_color || "#000000");
+      root.setProperty("--outline-px", `${style.outline_px ?? 2}px`);
+      root.setProperty("--text-align", style.text_align || "center");
+      root.setProperty("--width", `${style.width_percent || 90}%`);
+      stage.className = style.position || "bottom";
+      render();
+    }
+
+    function upsert(segment) {
+      if (!segment || !segment.id || !segment.translation) return;
+      const previous = segments.get(segment.id);
+      if (previous) {
+        const incomingRevision = Number(segment.revision || 0);
+        const previousRevision = Number(previous.revision || 0);
+        const incomingSequence = Number(segment.update_sequence || 0);
+        const previousSequence = Number(previous.update_sequence || 0);
+        if (incomingRevision < previousRevision) return;
+        if (incomingSequence && previousSequence && incomingSequence < previousSequence) return;
+      }
+      segments.set(segment.id, segment);
+    }
+
+    function render() {
+      const expected = new Set(order);
+      for (const node of Array.from(stack.querySelectorAll(".segment"))) {
+        if (!expected.has(node.dataset.id)) node.remove();
+      }
+      for (const id of order) {
+        const segment = segments.get(id);
+        if (!segment || (routeFilter && segment.route_id !== routeFilter)) continue;
+        let row = Array.from(stack.children).find(node => node.dataset.id === id);
+        if (!row) {
+          row = document.createElement("article");
+          row.className = "segment";
+          row.dataset.id = id;
+        }
+        row.dataset.status = segment.status || "";
+        row.dataset.revision = String(segment.revision || 0);
+        const routeLabel = setText(row, "route-label", segment.route_label);
+        routeLabel.hidden = Boolean(routeFilter) || !segment.route_label;
+        const source = setText(row, "source", segment.source_text);
+        source.hidden = !style.show_source;
+        setText(row, "translation", segment.translation);
+        stack.appendChild(row);
+      }
+    }
+
+    function receive(message) {
+      const messageSequence = Number(message.sequence || 0);
+      if (message.type !== "snapshot" && messageSequence && messageSequence < lastSequence) {
+        return;
+      }
+      if (message.type === "clear") {
+        segments.clear();
+        order = [];
+        lastSequence = Math.max(lastSequence, messageSequence);
+        render();
+        return;
+      }
+      if (message.style) applyStyle(message.style);
+      if (message.type === "snapshot") {
+        segments.clear();
+        for (const segment of message.segments || []) upsert(segment);
+        order = (message.segments || []).map(segment => segment.id);
+        lastSequence = messageSequence;
+      } else if (message.type === "upsert") {
+        upsert(message.segment);
+        for (const id of message.removed_ids || []) segments.delete(id);
+        order = message.order || order;
+        lastSequence = Math.max(lastSequence, messageSequence);
+      }
+      render();
+    }
+
+    function connect() {
+      const scheme = location.protocol === "https:" ? "wss" : "ws";
+      const socket = new WebSocket(`${scheme}://${location.host}/ws/overlay`);
+      socket.onopen = () => socket.send("ready");
+      socket.onmessage = event => receive(JSON.parse(event.data));
+      socket.onclose = () => window.setTimeout(connect, 1500);
+    }
+
+    connect();
+  </script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+# Direct dependency lock for the tested Windows baseline.
+# setup.ps1 installs these versions before installing the local package.
+PySide6==6.11.1
+sounddevice==0.5.5
+SoundCard==0.4.5
+numpy==2.2.6
+scipy==1.15.3
+webrtcvad-wheels==2.0.14
+faster-whisper==1.2.1
+ctranslate2==4.8.1
+httpx==0.28.1
+opencc-python-reimplemented==0.1.7
+huggingface-hub==1.26.0
+tqdm==4.70.0
+fastapi==0.141.1
+uvicorn[standard]==0.52.0
+websockets==15.0.1
