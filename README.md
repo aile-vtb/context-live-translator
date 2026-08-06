@@ -34,7 +34,8 @@ WASAPI loopback 會擷取指定「播放裝置」正在播放的所有聲音，�
 ## 系統需求
 
 - Windows 10 或 Windows 11，64-bit。
-- Python 3.10–3.12；建議 Python 3.11 x64。
+- Python 3.10–3.12；一般 Windows 使用者建議
+  [Python 3.11.9 x64](https://www.python.org/downloads/release/python-3119/)。
 - 建議 NVIDIA GPU。CPU 模式可以啟動，但不保證達到即時速度。
 - 使用者自行準備：
   - 本機 faster-whisper CTranslate2 模型目錄；
@@ -46,11 +47,23 @@ Whisper；`setup.ps1` 與一般啟動不會自動下載。
 
 ## 安裝
 
+### 一般 Windows 使用者（不需要 Git）
+
+到 GitHub 的 [Releases](https://github.com/aile-vtb/context-live-translator/releases)
+下載 `ContextLiveTranslator-v0.3.2-Windows-Setup.zip`，完整解壓後閱讀
+[`README_FIRST.md`](README_FIRST.md)，再依序雙擊：
+
+1. `setup.cmd`：建立 Python 環境及安裝依賴；
+2. `run.cmd`：啟動程式。
+
+請不要把 GitHub 自動產生的 `Source code (zip)` 當成一般使用者安裝包。
+
+### Git 使用者／開發者
+
 ```powershell
-git clone <your-repository-url>
+git clone https://github.com/aile-vtb/context-live-translator.git
 cd context-live-translator
-Set-ExecutionPolicy -Scope Process Bypass
-.\setup.ps1
+.\setup.cmd
 ```
 
 `setup.ps1` 只會建立 `.venv`、安裝 Python 依賴與執行環境診斷。它不會下載
@@ -102,17 +115,31 @@ Git LFS 散布權重。
 
 ### 2. llama.cpp
 
-從 [llama.cpp 官方 releases](https://github.com/ggml-org/llama.cpp/releases)
-取得 Windows build，解壓後在 GUI 選擇 `llama-server.exe`。本專案目前的開發
-基準是 llama.cpp build `10181 (caa596ab3)`，但不綁定該版本。
+本專案目前的驗證基準是
+[llama.cpp build b10181](https://github.com/ggml-org/llama.cpp/releases/tag/b10181)：
+
+- NVIDIA：下載
+  [`llama-b10181-bin-win-cuda-12.4-x64.zip`](https://github.com/ggml-org/llama.cpp/releases/download/b10181/llama-b10181-bin-win-cuda-12.4-x64.zip)
+  與
+  [`cudart-llama-bin-win-cuda-12.4-x64.zip`](https://github.com/ggml-org/llama.cpp/releases/download/b10181/cudart-llama-bin-win-cuda-12.4-x64.zip)，
+  解壓到同一資料夾。
+- CPU：下載
+  [`llama-b10181-bin-win-cpu-x64.zip`](https://github.com/ggml-org/llama.cpp/releases/download/b10181/llama-b10181-bin-win-cpu-x64.zip)。
+
+不要下載 Release 頁底部的 `Source code (zip)`；它不包含 Windows 執行檔。
+解壓後在 GUI 選擇其中的 `llama-server.exe`。完整圖解式步驟請看
+[`README_FIRST.md`](README_FIRST.md)。
 
 ### 3. 翻譯 GGUF
 
 選擇支援 chat template 的文字 instruct GGUF：
 
-- **Gemma**：程式由檔名辨識 `gemma`，直接使用 `json_object`，再於本機驗證
-  所需欄位。使用前必須閱讀並接受
-  [Gemma Terms of Use](https://ai.google.dev/gemma/terms)。
+- **Gemma**：建議先使用 Google 官方
+  [Gemma 3 4B IT QAT Q4_0 GGUF](https://huggingface.co/google/gemma-3-4b-it-qat-q4_0-gguf)，
+  下載 `gemma-3-4b-it-q4_0.gguf`（約 3.16 GB）。必須登入 Hugging Face 並先接受
+  [Gemma Terms of Use](https://ai.google.dev/gemma/terms)。本程式只做文字翻譯，
+  不需要該 repository 的 `mmproj-model-f16-4B.gguf`。程式由檔名辨識 `gemma`，
+  直接使用 `json_object`，再於本機驗證所需欄位。
 - **Qwen**：程式由檔名辨識 `qwen`，優先要求 JSON Schema；如果 llama.cpp
   回應 HTTP 400，會自動改用 `json_object`。
 - **其他模型**：使用 Generic profile，行為與 Qwen 相同。模型仍必須可靠地

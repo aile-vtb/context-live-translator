@@ -3,6 +3,19 @@
 Run this checklist on a clean Windows 10 or Windows 11 x64 machine before
 tagging a release.
 
+## Release package
+
+- Run `powershell -ExecutionPolicy Bypass -File scripts\build-release.ps1` from
+  a clean working tree.
+- Confirm the generated ZIP contains `README_FIRST.md`, `setup.cmd`, `run.cmd`,
+  license files, locked requirements and `src`, but no `.git`, `.venv`, tests,
+  config, sessions, logs, runtime binaries or model weights.
+- Verify the generated `.sha256` file with `Get-FileHash`.
+- Download the uploaded asset from a draft GitHub Release and repeat the clean
+  Windows installation from the downloaded ZIP, not from the checkout.
+- Confirm every Python, llama.cpp and Gemma URL in `README_FIRST.md` still
+  resolves to the stated official file before publishing.
+
 ## Installation and privacy
 
 - Clone the repository into a path containing spaces and non-ASCII characters.

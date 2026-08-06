@@ -13,7 +13,7 @@ $selectedPython = $null
 $savedErrorPreference = $ErrorActionPreference
 $ErrorActionPreference = "SilentlyContinue"
 foreach ($candidate in @("-3.11", "-3.10", "-3.12")) {
-    & py $candidate -c "import sys; raise SystemExit(0 if (3,10) <= sys.version_info[:2] < (3,13) else 1)" 2>$null
+    & py $candidate -c "import struct, sys; raise SystemExit(0 if (3,10) <= sys.version_info[:2] < (3,13) and struct.calcsize('P') == 8 else 1)" 2>$null
     if ($LASTEXITCODE -eq 0) {
         $selectedPython = $candidate
         break
@@ -21,8 +21,11 @@ foreach ($candidate in @("-3.11", "-3.10", "-3.12")) {
 }
 $ErrorActionPreference = $savedErrorPreference
 if (-not $selectedPython) {
-    throw "64-bit Python 3.10, 3.11, or 3.12 is required. Python 3.11 is recommended."
+    throw "64-bit Python 3.10, 3.11, or 3.12 is required. Install Python 3.11.9 x64 from README_FIRST.md."
 }
+
+$pythonDescription = & py $selectedPython -c "import platform, struct; print(platform.python_version() + ' (' + str(struct.calcsize('P') * 8) + '-bit)')"
+Write-Host "Using Python $pythonDescription"
 
 if (-not (Test-Path -LiteralPath ".venv\Scripts\python.exe")) {
     Write-Host "Creating .venv with $selectedPython..."
@@ -43,4 +46,4 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host ""
-Write-Host "Installation complete. No models were downloaded. Run .\run.ps1, then configure models in the GUI."
+Write-Host "Installation complete. No models were downloaded. Run run.cmd, then configure models in the GUI."
