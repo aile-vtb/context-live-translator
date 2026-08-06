@@ -2,7 +2,13 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from context_live_translator.speech import SpeechWorker, resolve_compute, whisper_language_code
+from context_live_translator.speech import (
+    SpeechWorker,
+    is_cuda_runtime_error,
+    load_whisper_model,
+    resolve_compute,
+    whisper_language_code,
+)
 
 
 def test_auto_language_passes_none_to_whisper() -> None:
@@ -25,6 +31,54 @@ def test_explicit_cpu_auto_compute_uses_int8() -> None:
     assert resolve_compute("cpu", "auto") == ("cpu", "int8")
     assert resolve_compute("cuda", "auto") == ("cuda", "int8_float16")
     assert resolve_compute("cpu", "float32") == ("cpu", "float32")
+
+
+def test_cuda_runtime_error_is_recognized() -> None:
+    assert is_cuda_runtime_error(RuntimeError("Library cublas64_12.dll is not found"))
+    assert not is_cuda_runtime_error(RuntimeError("model.bin is not found"))
+
+
+def test_auto_cuda_load_failure_falls_back_to_cpu(tmp_path) -> None:
+    calls = []
+    statuses = []
+
+    def factory(path, **kwargs):
+        calls.append((path, kwargs))
+        if kwargs["device"] == "cuda":
+            raise RuntimeError("Library cublas64_12.dll is not found")
+        return object()
+
+    _, device, compute_type = load_whisper_model(
+        factory,
+        tmp_path,
+        "cuda",
+        "int8_float16",
+        True,
+        statuses.append,
+    )
+    assert [call[1]["device"] for call in calls] == ["cuda", "cpu"]
+    assert (device, compute_type) == ("cpu", "int8")
+    assert "CPU" in statuses[0]
+
+
+def test_explicit_cuda_load_failure_is_actionable(tmp_path) -> None:
+    def factory(path, **kwargs):
+        raise RuntimeError("Library cublas64_12.dll is not found")
+
+    try:
+        load_whisper_model(
+            factory,
+            tmp_path,
+            "cuda",
+            "int8_float16",
+            False,
+            lambda message: None,
+        )
+    except RuntimeError as exc:
+        assert "setup-gpu.cmd" in str(exc)
+        assert "CPU" in str(exc)
+    else:
+        raise AssertionError("Expected an actionable CUDA runtime error")
 
 
 def test_shared_speech_queue_preserves_audio_route_identity() -> None:

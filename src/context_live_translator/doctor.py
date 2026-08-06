@@ -10,6 +10,7 @@ import httpx
 
 from .audio import list_input_sources, list_loopback_sources
 from .config import AppConfig
+from .cuda_runtime import missing_cuda_libraries, register_cuda_dll_directories
 from .model_manager import validate_whisper_model
 from .translator import model_profile
 
@@ -82,12 +83,22 @@ def run_doctor(config: AppConfig) -> list[DiagnosticCheck]:
         )
     )
     try:
+        cuda_paths = (config.llama_server_path,) if config.llama_server_path else ()
+        register_cuda_dll_directories(cuda_paths)
         import ctranslate2
 
         cuda_count = ctranslate2.get_cuda_device_count()
         level = "ok" if cuda_count or config.whisper_device != "cuda" else "error"
         detail = f"CTranslate2 {ctranslate2.__version__}；CUDA 裝置 {cuda_count}"
-        if not cuda_count:
+        missing_libraries = missing_cuda_libraries(cuda_paths) if cuda_count else ()
+        if missing_libraries:
+            level = "error" if config.whisper_device == "cuda" else "warning"
+            detail += (
+                "；缺少 "
+                + "、".join(missing_libraries)
+                + "。請保留 llama.cpp CUDA DLL，或執行 setup-gpu.cmd"
+            )
+        elif not cuda_count:
             detail += "；可使用 CPU，但不保證即時"
         checks.append(DiagnosticCheck("Compute", level, detail))
     except Exception as exc:

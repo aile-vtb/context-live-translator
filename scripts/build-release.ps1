@@ -59,6 +59,8 @@ New-Item -ItemType Directory -Path $stageRoot | Out-Null
 $files = @(
     "setup.cmd",
     "setup.ps1",
+    "setup-gpu.cmd",
+    "setup-gpu.ps1",
     "run.cmd",
     "run.ps1",
     "README_FIRST.md",
@@ -67,6 +69,7 @@ $files = @(
     "THIRD_PARTY_NOTICES.md",
     "SECURITY.md",
     "requirements-lock.txt",
+    "requirements-gpu.txt",
     "pyproject.toml"
 )
 foreach ($file in $files) {

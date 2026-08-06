@@ -1,0 +1,5 @@
+# Optional local NVIDIA runtime for Whisper GPU mode on Windows.
+# This download is approximately 1 GB and is not installed by setup.cmd.
+nvidia-cublas-cu12==12.4.5.8; sys_platform == "win32"
+nvidia-cudnn-cu12==9.5.0.50; sys_platform == "win32"
+nvidia-cuda-runtime-cu12==12.4.127; sys_platform == "win32"

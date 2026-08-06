@@ -14,7 +14,7 @@ Context Live Translator 是一個 Windows 單機桌面程式：從明確選定�
 > revision, with an optional localhost WebSocket overlay for OBS Browser
 > Source. No cloud translation API is used.
 
-目前版本：`0.3.2`（alpha）
+目前版本：`0.3.3`（alpha）
 
 ## 特色與邊界
 
@@ -54,7 +54,7 @@ Whisper；`setup.ps1` 與一般啟動不會自動下載。
 ### 一般 Windows 使用者（不需要 Git）
 
 到 GitHub 的 [Releases](https://github.com/aile-vtb/context-live-translator/releases)
-下載 `ContextLiveTranslator-v0.3.2-Windows-Setup.zip`，完整解壓後閱讀
+下載 `ContextLiveTranslator-v0.3.3-Windows-Setup.zip`，完整解壓後閱讀
 [`README_FIRST.md`](README_FIRST.md)，再依序雙擊：
 
 1. `setup.cmd`：建立 Python 環境及安裝依賴；
@@ -131,8 +131,14 @@ Git LFS 散布權重。
   [`llama-b10181-bin-win-cpu-x64.zip`](https://github.com/ggml-org/llama.cpp/releases/download/b10181/llama-b10181-bin-win-cpu-x64.zip)。
 
 不要下載 Release 頁底部的 `Source code (zip)`；它不包含 Windows 執行檔。
-解壓後在 GUI 選擇其中的 `llama-server.exe`。完整圖解式步驟請看
+解壓後在 GUI 選擇其中的 `llama-server.exe`。請勿只把 exe 單獨移走；
+NVIDIA 版的 CUDA DLL 必須留在同一資料夾。程式會把這個資料夾同時提供給
+Whisper 使用。完整圖解式步驟請看
 [`README_FIRST.md`](README_FIRST.md)。
+
+若使用 CPU 版 llama.cpp、但希望 Whisper 使用 NVIDIA GPU，可另外雙擊
+`setup-gpu.cmd` 安裝 Whisper 所需的 CUDA 12／cuBLAS／cuDNN 9；下載約 1 GB。
+這是選用步驟，一般 `setup.cmd` 不會下載 NVIDIA runtime。
 
 ### 3. 翻譯 GGUF
 
@@ -256,8 +262,12 @@ v1 的辨識修正是文字上下文校正，不會重新解碼音訊。GUI tool
 
 - **找不到 Whisper model.bin**：到「模型與進階」按「偵測既有模型」，或按
   「下載並安裝到使用者資料夾」；不要選到 `.venv\Lib\site-packages`。
-- **CUDA 無法載入**：先改用 CPU 驗證流程；再依 CTranslate2 文件核對
-  NVIDIA driver、CUDA 與 cuDNN。
+- **`cublas64_12.dll` 找不到**：確認 GUI 選取的是 NVIDIA llama.cpp 資料夾內的
+  `llama-server.exe`，而且 exe 旁仍有 `cublas64_12.dll`、`cublasLt64_12.dll`
+  與 `cudart64_12.dll`。v0.3.3 起程式會自動加入該 DLL 資料夾；不需複製 DLL。
+  若使用 CPU 版 llama.cpp，請執行 `setup-gpu.cmd`，或將 Whisper 改為 CPU。
+- **其他 CUDA 無法載入**：Auto 模式會自動改用 CPU；明確選擇 CUDA 時，請依
+  錯誤訊息檢查 NVIDIA driver、CUDA 12／cuBLAS 與 cuDNN 9。
 - **llama.cpp port 被占用**：關閉其他 `llama-server.exe`，或在進階設定更換
   localhost port。
 - **OBS Overlay port 被占用**：關閉仍在背景執行的舊版程式，或在「OBS

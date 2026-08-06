@@ -47,3 +47,4 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host ""
 Write-Host "Installation complete. No models were downloaded. Run run.cmd, then configure models in the GUI."
+Write-Host "Optional: run setup-gpu.cmd only if Whisper GPU mode has no CUDA DLLs available."

@@ -57,6 +57,10 @@ tagging a release.
 - Test Traditional Chinese and one custom target language.
 - Test a Gemma GGUF (`json_object`) and a Qwen GGUF (JSON Schema with fallback).
 - Test NVIDIA CUDA and CPU fallback (`GPU layers = 0`).
+- On a clean NVIDIA machine without a global CUDA Toolkit, keep the llama.cpp
+  CUDA DLLs beside `llama-server.exe` and confirm Whisper GPU mode can reuse
+  them. Then temporarily hide `cublas64_12.dll` and confirm Auto falls back to
+  CPU while explicit CUDA shows the `setup-gpu.cmd` guidance.
 
 ## Revision and persistence
 

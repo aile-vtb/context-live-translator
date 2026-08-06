@@ -66,7 +66,13 @@ Windows 詢問是否合併資料夾時選擇合併。最後確認裡面有：
 
 ```text
 C:\AI\llama-b10181-cuda\llama-server.exe
+C:\AI\llama-b10181-cuda\cublas64_12.dll
+C:\AI\llama-b10181-cuda\cublasLt64_12.dll
+C:\AI\llama-b10181-cuda\cudart64_12.dll
 ```
+
+請勿只把 `llama-server.exe` 單獨移到別處；上面的 DLL 必須留在 exe 的同一資料夾。
+v0.3.3 起，程式會自動讓 Whisper 使用這個資料夾內的 CUDA DLL。
 
 ### CPU 模式
 
@@ -75,6 +81,10 @@ C:\AI\llama-b10181-cuda\llama-server.exe
 - [llama-b10181-bin-win-cpu-x64.zip](https://github.com/ggml-org/llama.cpp/releases/download/b10181/llama-b10181-bin-win-cpu-x64.zip)
 
 解壓到例如 `C:\AI\llama-b10181-cpu`。CPU 模式可以使用，但不保證即時翻譯速度。
+
+如果翻譯模型使用 CPU 版 llama.cpp，但 Whisper 想使用 NVIDIA GPU，請在執行
+`setup.cmd` 後再雙擊 `setup-gpu.cmd`。它會安裝 CUDA 12、cuBLAS 與 cuDNN 9 的
+Python runtime，下載約 1 GB。若不需要 Whisper GPU，請略過這個選用步驟。
 
 ## 步驟四：下載 Gemma GGUF
 
@@ -106,3 +116,8 @@ C:\AI\llama-b10181-cuda\llama-server.exe
 回到「即時翻譯」選擇目標語言，為每個音訊來源設定裝置與來源語言，就可以開始。
 
 完整功能、OBS Browser Source、多裝置監聽與疑難排解請閱讀 [README.md](README.md)。
+
+若看到 `Library cublas64_12.dll is not found or cannot be loaded`，代表 DLL 雖可能
+已下載，但 Windows 沒有在 Whisper 的搜尋路徑找到它。請先確認 GUI 選到上述
+NVIDIA 資料夾內的 `llama-server.exe`；v0.3.3 會自動加入該資料夾。仍失敗時可
+執行 `setup-gpu.cmd`，或先把 Whisper 運算裝置改為 CPU。

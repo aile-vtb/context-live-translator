@@ -261,6 +261,7 @@ class AppController(QObject):
             self._recognition_ready.emit,
             self.status_changed.emit,
             self.error_occurred.emit,
+            cuda_library_paths=(self.config.llama_server_path,),
         )
         self._translation = TranslationWorker(
             client,

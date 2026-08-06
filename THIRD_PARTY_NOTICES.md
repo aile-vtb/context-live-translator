@@ -25,6 +25,7 @@ The application depends on, or can interoperate with, the following projects:
 | [huggingface_hub](https://github.com/huggingface/huggingface_hub) | Explicit Whisper model discovery/download | Apache-2.0 |
 | [tqdm](https://github.com/tqdm/tqdm) | Model download progress | MPL-2.0 AND MIT |
 | [llama.cpp](https://github.com/ggml-org/llama.cpp) | Optional local translation server | MIT |
+| [NVIDIA CUDA Toolkit libraries](https://developer.nvidia.com/cuda-toolkit) | Optional Whisper GPU runtime installed by `setup-gpu.cmd` | NVIDIA CUDA Toolkit EULA |
 
 No `llama.cpp` binary, Whisper model, GGUF model, or other model weight is
 distributed in this repository. Users must obtain those files separately and

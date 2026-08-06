@@ -9,6 +9,7 @@ from typing import Any
 
 import numpy as np
 
+from .cuda_runtime import register_cuda_dll_directories
 from .models import Recognition
 
 INITIAL_PROMPTS: dict[str, str | None] = {
@@ -47,6 +48,57 @@ def resolve_compute(device_setting: str, compute_setting: str) -> tuple[str, str
     return (device, "int8_float16") if device == "cuda" else (device, "int8")
 
 
+def is_cuda_runtime_error(error: BaseException) -> bool:
+    message = str(error).lower()
+    markers = (
+        "cuda",
+        "cublas",
+        "cudnn",
+        "nvcuda",
+        "nvrtc",
+    )
+    return any(marker in message for marker in markers)
+
+
+def load_whisper_model(
+    model_factory: Any,
+    model_directory: Path,
+    device: str,
+    compute_type: str,
+    allow_cpu_fallback: bool,
+    on_status: Callable[[str], None],
+) -> tuple[Any, str, str]:
+    arguments = {
+        "device": device,
+        "compute_type": compute_type,
+        "local_files_only": True,
+    }
+    try:
+        return model_factory(str(model_directory), **arguments), device, compute_type
+    except Exception as exc:
+        if device == "cuda" and is_cuda_runtime_error(exc):
+            if allow_cpu_fallback:
+                on_status(
+                    "Whisper CUDA 執行階段無法載入，已自動改用 CPU（不保證即時）"
+                )
+                return (
+                    model_factory(
+                        str(model_directory),
+                        device="cpu",
+                        compute_type="int8",
+                        local_files_only=True,
+                    ),
+                    "cpu",
+                    "int8",
+                )
+            raise RuntimeError(
+                "CUDA 執行階段無法載入。請確認 llama-server.exe 與 "
+                "cublas64_12.dll 位於同一資料夾，或執行 setup-gpu.cmd；"
+                f"也可將 Whisper 運算裝置改為 CPU。原始錯誤：{exc}"
+            ) from exc
+        raise
+
+
 class SpeechWorker:
     def __init__(
         self,
@@ -56,6 +108,7 @@ class SpeechWorker:
         on_result: Callable[[str, Recognition, float, float], None],
         on_status: Callable[[str], None],
         on_error: Callable[[str], None],
+        cuda_library_paths: tuple[str, ...] = (),
     ) -> None:
         self.model_path = model_path
         self.device_setting = device
@@ -63,6 +116,7 @@ class SpeechWorker:
         self.on_result = on_result
         self.on_status = on_status
         self.on_error = on_error
+        self.cuda_library_paths = cuda_library_paths
         self._queue: queue.Queue[str | None] = queue.Queue()
         self._route_queues: dict[
             str, deque[tuple[np.ndarray, float, float, str]]
@@ -113,6 +167,7 @@ class SpeechWorker:
 
     def _run(self) -> None:
         try:
+            register_cuda_dll_directories(self.cuda_library_paths)
             from faster_whisper import WhisperModel
 
             model_directory = Path(self.model_path)
@@ -123,13 +178,15 @@ class SpeechWorker:
                 self.compute_setting,
             )
             self.on_status(f"載入 Whisper（{device}, {compute_type}）…")
-            model = WhisperModel(
-                str(model_directory),
-                device=device,
-                compute_type=compute_type,
-                local_files_only=True,
+            model, device, compute_type = load_whisper_model(
+                WhisperModel,
+                model_directory,
+                device,
+                compute_type,
+                self.device_setting == "auto",
+                self.on_status,
             )
-            self.on_status("Whisper 已就緒")
+            self.on_status(f"Whisper 已就緒（{device}, {compute_type}）")
         except Exception as exc:
             self.on_error(f"Whisper 載入失敗：{exc}")
             return
