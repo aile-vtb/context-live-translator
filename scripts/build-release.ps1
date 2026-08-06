@@ -108,6 +108,9 @@ $stagedFiles = Get-ChildItem -LiteralPath $stageRoot -Recurse -Force -File
 $requiredReleaseFiles = @(
     "README_FIRST.md",
     "setup.cmd",
+    "setup-gpu.cmd",
+    "requirements-gpu.txt",
+    "src\context_live_translator\cuda_runtime.py",
     "run.cmd",
     "src\context_live_translator\static\logo.gif"
 )
