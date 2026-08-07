@@ -10,6 +10,7 @@ from typing import Any
 import numpy as np
 
 from .cuda_runtime import register_cuda_dll_directories
+from .i18n import tr
 from .models import Recognition
 
 INITIAL_PROMPTS: dict[str, str | None] = {
@@ -79,7 +80,7 @@ def load_whisper_model(
         if device == "cuda" and is_cuda_runtime_error(exc):
             if allow_cpu_fallback:
                 on_status(
-                    "Whisper CUDA 執行階段無法載入，已自動改用 CPU（不保證即時）"
+                    tr("Whisper CUDA 執行階段無法載入，已自動改用 CPU（不保證即時）")
                 )
                 return (
                     model_factory(
@@ -92,9 +93,10 @@ def load_whisper_model(
                     "int8",
                 )
             raise RuntimeError(
-                "CUDA 執行階段無法載入。請確認 llama-server.exe 與 "
-                "cublas64_12.dll 位於同一資料夾，或執行 setup-gpu.cmd；"
-                f"也可將 Whisper 運算裝置改為 CPU。原始錯誤：{exc}"
+                tr(
+                    "CUDA 執行階段無法載入。請確認 llama-server.exe 與 cublas64_12.dll 位於同一資料夾，或執行 setup-gpu.cmd；也可將 Whisper 運算裝置改為 CPU。原始錯誤：{error}",
+                    error=exc,
+                )
             ) from exc
         raise
 
@@ -143,7 +145,10 @@ class SpeechWorker:
             route_queue = self._route_queues.setdefault(route_id, deque())
             if len(route_queue) >= self._max_pending_per_route:
                 self.on_error(
-                    f"Whisper route「{route_id}」佇列已滿；已丟棄一段音訊以維持即時性"
+                    tr(
+                        "Whisper route「{route_id}」佇列已滿；已丟棄一段音訊以維持即時性",
+                        route_id=route_id,
+                    )
                 )
                 return
             needs_schedule = not route_queue
@@ -172,12 +177,14 @@ class SpeechWorker:
 
             model_directory = Path(self.model_path)
             if not model_directory.is_dir():
-                raise FileNotFoundError("找不到本機 Whisper CTranslate2 模型目錄")
+                raise FileNotFoundError(tr("找不到本機 Whisper CTranslate2 模型目錄"))
             device, compute_type = resolve_compute(
                 self.device_setting,
                 self.compute_setting,
             )
-            self.on_status(f"載入 Whisper（{device}, {compute_type}）…")
+            self.on_status(
+                tr("載入 Whisper（{device}, {compute_type}）…", device=device, compute_type=compute_type)
+            )
             model, device, compute_type = load_whisper_model(
                 WhisperModel,
                 model_directory,
@@ -186,9 +193,11 @@ class SpeechWorker:
                 self.device_setting == "auto",
                 self.on_status,
             )
-            self.on_status(f"Whisper 已就緒（{device}, {compute_type}）")
+            self.on_status(
+                tr("Whisper 已就緒（{device}, {compute_type}）", device=device, compute_type=compute_type)
+            )
         except Exception as exc:
-            self.on_error(f"Whisper 載入失敗：{exc}")
+            self.on_error(tr("Whisper 載入失敗：{error}", error=exc))
             return
         reported_cantonese_fallback = False
         while True:
@@ -212,7 +221,7 @@ class SpeechWorker:
                     and model_language == "zh"
                     and not reported_cantonese_fallback
                 ):
-                    self.on_status("此 Whisper 模型沒有粵語 token，改用中文 token 辨識")
+                    self.on_status(tr("此 Whisper 模型沒有粵語 token，改用中文 token 辨識"))
                     reported_cantonese_fallback = True
                 segment_iter, info = model.transcribe(
                     audio,
@@ -257,4 +266,4 @@ class SpeechWorker:
                     ended_at,
                 )
             except Exception as exc:
-                self.on_error(f"Whisper 辨識失敗：{exc}")
+                self.on_error(tr("Whisper 辨識失敗：{error}", error=exc))

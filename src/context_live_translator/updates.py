@@ -9,6 +9,7 @@ from typing import Any
 from packaging.version import InvalidVersion, Version
 
 from . import __version__
+from .i18n import tr
 
 PACKAGE_NAME = "context-live-translator"
 PROJECT_URL = "https://github.com/aile-vtb/context-live-translator"
@@ -48,7 +49,7 @@ def parse_tag_version(tag_name: str) -> Version:
 
 def select_latest_release(payload: Any) -> ReleaseInfo:
     if not isinstance(payload, list):
-        raise ValueError("GitHub Release 回應格式不正確")
+        raise ValueError(tr("GitHub Release 回應格式不正確"))
     candidates: list[ReleaseInfo] = []
     for item in payload:
         if not isinstance(item, dict) or item.get("draft") is True:
@@ -76,7 +77,7 @@ def select_latest_release(payload: Any) -> ReleaseInfo:
             )
         )
     if not candidates:
-        raise ValueError("GitHub 沒有可用的 Release")
+        raise ValueError(tr("GitHub 沒有可用的 Release"))
     return max(candidates, key=lambda release: release.version)
 
 

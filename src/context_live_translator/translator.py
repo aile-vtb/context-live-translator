@@ -11,6 +11,7 @@ from typing import Any
 
 import httpx
 
+from .i18n import tr
 from .models import (
     RevisionItem,
     RevisionRequest,
@@ -24,7 +25,7 @@ def decode_json_content(content: Any) -> Any:
     if isinstance(content, (dict, list)):
         return content
     if not isinstance(content, str):
-        raise ValueError("模型回應不是文字或 JSON 物件")
+        raise ValueError(tr("模型回應不是文字或 JSON 物件"))
     stripped = content.strip()
     try:
         return json.loads(stripped)
@@ -38,7 +39,7 @@ def decode_json_content(content: Any) -> Any:
                     return json.loads(stripped[start : end + 1])
                 except json.JSONDecodeError:
                     pass
-        raise ValueError("模型回應不含有效 JSON") from original_error
+        raise ValueError(tr("模型回應不含有效 JSON")) from original_error
 
 
 def model_profile(model_path: str) -> str:
@@ -86,30 +87,30 @@ def revision_schema(ids: tuple[str, ...]) -> dict[str, Any]:
 
 def validate_translation(payload: Any) -> str:
     if not isinstance(payload, dict):
-        raise ValueError("翻譯回應不是 JSON 物件")
+        raise ValueError(tr("翻譯回應不是 JSON 物件"))
     translation = payload.get("translation")
     if not isinstance(translation, str) or not translation.strip():
-        raise ValueError("翻譯回應缺少 translation")
+        raise ValueError(tr("翻譯回應缺少 translation"))
     return translation.strip()
 
 
 def validate_revision(payload: Any, expected_ids: tuple[str, ...]) -> tuple[RevisionItem, ...]:
     if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
-        raise ValueError("回修回應缺少 items")
+        raise ValueError(tr("回修回應缺少 items"))
     raw_items = payload["items"]
     if len(raw_items) != len(expected_ids):
-        raise ValueError("回修回應的字幕數量不符")
+        raise ValueError(tr("回修回應的字幕數量不符"))
     actual_ids = tuple(item.get("id") for item in raw_items if isinstance(item, dict))
     if actual_ids != expected_ids:
-        raise ValueError("回修回應必須保留原 ID 與順序")
+        raise ValueError(tr("回修回應必須保留原 ID 與順序"))
     result: list[RevisionItem] = []
     for item in raw_items:
         source = item.get("corrected_source_text")
         translation = item.get("translation")
         if not isinstance(source, str) or not source.strip():
-            raise ValueError("回修回應缺少 corrected_source_text")
+            raise ValueError(tr("回修回應缺少 corrected_source_text"))
         if not isinstance(translation, str) or not translation.strip():
-            raise ValueError("回修回應缺少 translation")
+            raise ValueError(tr("回修回應缺少 translation"))
         result.append(RevisionItem(item["id"], source.strip(), translation.strip()))
     return tuple(result)
 
@@ -138,14 +139,14 @@ class LlamaServer:
 
     def validate(self) -> None:
         if not Path(self.executable).is_file():
-            raise FileNotFoundError("找不到 llama-server.exe")
+            raise FileNotFoundError(tr("找不到 llama-server.exe"))
         if not Path(self.model).is_file():
-            raise FileNotFoundError("找不到本機 GGUF 模型")
+            raise FileNotFoundError(tr("找不到本機 GGUF 模型"))
 
     def start(self, timeout: float = 90) -> None:
         with self._lock:
             if self._shutdown_requested.is_set():
-                raise RuntimeError("llama-server 已停止；不會在 session 結束後重新啟動")
+                raise RuntimeError(tr("llama-server 已停止；不會在 session 結束後重新啟動"))
             self.validate()
             if self.process and self.process.poll() is None:
                 return
@@ -158,7 +159,12 @@ class LlamaServer:
                     ).status_code
                     == 200
                 ):
-                    raise RuntimeError(f"連接埠 {self.port} 已有 llama-server；請先關閉它或更換連接埠")
+                    raise RuntimeError(
+                        tr(
+                            "連接埠 {port} 已有 llama-server；請先關閉它或更換連接埠",
+                            port=self.port,
+                        )
+                    )
             except httpx.HTTPError:
                 pass
             command = [
@@ -190,7 +196,7 @@ class LlamaServer:
         while time.monotonic() < deadline:
             process = self.process
             if process is None or process.poll() is not None:
-                raise RuntimeError("llama-server 啟動後立即結束")
+                raise RuntimeError(tr("llama-server 啟動後立即結束"))
             try:
                 if (
                     httpx.get(
@@ -205,7 +211,7 @@ class LlamaServer:
                 pass
             time.sleep(0.4)
         self.stop()
-        raise TimeoutError("llama-server 未在期限內就緒")
+        raise TimeoutError(tr("llama-server 未在期限內就緒"))
 
     def stop(self) -> None:
         self._shutdown_requested.set()
@@ -274,7 +280,10 @@ class StructuredLlamaClient:
                     with self._mode_lock:
                         self._structured_mode = "json_object"
                     self.on_status(
-                        f"{self.profile} 不接受 JSON Schema，已切換為 JSON object 相容模式"
+                        tr(
+                            "{profile} 不接受 JSON Schema，已切換為 JSON object 相容模式",
+                            profile=self.profile,
+                        )
                     )
                     continue
                 raise
@@ -282,7 +291,7 @@ class StructuredLlamaClient:
                 self._structured_mode = mode
             content = response.json()["choices"][0]["message"]["content"]
             return decode_json_content(content)
-        raise RuntimeError("沒有可用的結構化輸出模式")
+        raise RuntimeError(tr("沒有可用的結構化輸出模式"))
 
     def translate(self, segment: TranscriptSegment) -> str:
         target = segment.target_language
@@ -403,7 +412,7 @@ class TranslationWorker:
         try:
             self._queue.put_nowait(segment)
         except queue.Full:
-            segment.error = "初譯佇列已滿"
+            segment.error = tr("初譯佇列已滿")
             self.on_result(segment)
 
     def stop(self) -> None:
@@ -435,7 +444,7 @@ class TranslationWorker:
                     if attempt < 2:
                         time.sleep(0.5 * (attempt + 1))
             else:
-                segment.error = f"翻譯失敗：{last_error}"
+                segment.error = tr("翻譯失敗：{error}", error=last_error)
             segment.translation_latency_ms = round((time.perf_counter() - started) * 1000)
             self.on_result(segment)
 
@@ -487,4 +496,7 @@ class ContextRevisionWorker:
             try:
                 self.on_result(self.client.revise(request))
             except Exception as exc:
-                self.on_error(request.generation, f"上下文回修失敗：{exc}")
+                self.on_error(
+                    request.generation,
+                    tr("上下文回修失敗：{error}", error=exc),
+                )

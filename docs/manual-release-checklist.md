@@ -49,6 +49,14 @@ tagging a release.
 - Confirm the logo appears in the main window title bar and Windows taskbar.
 - Confirm the app still starts when installed from the Release ZIP rather than
   the Git checkout.
+- Confirm the top-right interface selector defaults to 中文 and lists 中文,
+  English, and 日本語 in that order.
+- Switch languages while stopped and during an active session. Confirm every
+  tab, control, route card, subtitle status, warning, update state, model
+  download state, and diagnostic result follows the selected UI language.
+- Restart the app and confirm the selected interface language is restored.
+- Confirm changing the interface language does not change source-language or
+  target-language selections.
 - Confirm About displays the author and installed version without making a
   request during normal startup.
 - Open About and confirm it finds the newest published Release, including a

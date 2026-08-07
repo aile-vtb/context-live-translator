@@ -10,6 +10,7 @@ from PySide6.QtCore import QObject, QTimer, Signal, Slot
 
 from .audio import AudioCaptureManager
 from .config import AppConfig, normalize_audio_routes
+from .i18n import tr
 from .model_manager import validate_whisper_model
 from .models import (
     SOURCE_LANGUAGES,
@@ -115,12 +116,12 @@ class AppController(QObject):
     def configure_overlay(self) -> bool:
         if not self.config.obs_overlay_enabled:
             self.stop_overlay()
-            self.overlay_status_changed.emit("OBS Overlay 已停用")
+            self.overlay_status_changed.emit(tr("OBS Overlay 已停用"))
             return True
         if self.config.obs_overlay_port == self.config.llama_port:
             self.stop_overlay()
             self.overlay_status_changed.emit(
-                "OBS Overlay port 不可與 llama.cpp port 相同"
+                tr("OBS Overlay port 不可與 llama.cpp port 相同")
             )
             return False
         if (
@@ -132,7 +133,9 @@ class AppController(QObject):
                 self.config.obs_overlay_max_lines,
                 overlay_style(self.config),
             )
-            self.overlay_status_changed.emit(f"運作中：{self.obs_overlay_url}")
+            self.overlay_status_changed.emit(
+                tr("運作中：{url}", url=self.obs_overlay_url)
+            )
             return True
         self.stop_overlay()
         server = OverlayServer(
@@ -154,7 +157,7 @@ class AppController(QObject):
             if payload:
                 server.publish_segment(payload)
         self.overlay_running_changed.emit(True)
-        self.overlay_status_changed.emit(f"運作中：{self.obs_overlay_url}")
+        self.overlay_status_changed.emit(tr("運作中：{url}", url=self.obs_overlay_url))
         return True
 
     def stop_overlay(self) -> None:
@@ -165,10 +168,10 @@ class AppController(QObject):
 
     def preview_overlay(self) -> None:
         if not self._overlay or not self._overlay.running:
-            self.overlay_status_changed.emit("請先啟用並套用 OBS Overlay")
+            self.overlay_status_changed.emit(tr("請先啟用並套用 OBS Overlay"))
             return
         self._overlay.publish_preview()
-        self.overlay_status_changed.emit("已送出預覽字幕")
+        self.overlay_status_changed.emit(tr("已送出預覽字幕"))
 
     @Slot(object)
     def _publish_overlay_segment(self, value: object) -> None:
@@ -188,25 +191,29 @@ class AppController(QObject):
 
     def monitor_route(self, route_id: str, source: AudioSource) -> None:
         if self.workers_started:
-            self.error_occurred.emit("請先停止目前 session，再變更音訊來源")
+            self.error_occurred.emit(tr("請先停止目前 session，再變更音訊來源"))
             return
         route = self._route(route_id)
         if route is None:
-            self.error_occurred.emit(f"找不到音訊 route：{route_id}")
+            self.error_occurred.emit(tr("找不到音訊 route：{route_id}", route_id=route_id))
             return
         try:
             self.audio.open_route(route, source)
             route.source_fingerprint = source.fingerprint
             if route is self.config.audio_routes[0]:
                 self.config.audio_source_fingerprint = source.fingerprint
-            self.status_changed.emit(f"正在監聽「{route.label}」：{source.name}")
+            self.status_changed.emit(
+                tr("正在監聽「{label}」：{source}", label=route.label, source=source.name)
+            )
         except Exception as exc:
             self.audio.close_route(route_id)
-            self.error_occurred.emit(f"無法開啟「{route.label}」音訊來源：{exc}")
+            self.error_occurred.emit(
+                tr("無法開啟「{label}」音訊來源：{error}", label=route.label, error=exc)
+            )
 
     def close_route(self, route_id: str) -> None:
         if self.workers_started:
-            self.error_occurred.emit("請先停止目前 session，再變更音訊來源")
+            self.error_occurred.emit(tr("請先停止目前 session，再變更音訊來源"))
             return
         self.audio.close_route(route_id)
 
@@ -282,13 +289,16 @@ class AppController(QObject):
         self.running_changed.emit(True)
         self.settings_locked_changed.emit(True)
         source_summary = "、".join(
-            f"{route.label}={SOURCE_LANGUAGES[route.source_language].display_name}"
+            f"{route.label}={tr(SOURCE_LANGUAGES[route.source_language].display_name)}"
             for route in self.config.audio_routes
             if route.enabled
         )
         self.status_changed.emit(
-            f"已開始聽讀；目標={self.config.target_language.display_name}；"
-            f"來源：{source_summary}"
+            tr(
+                "已開始聽讀；目標={target}；來源：{sources}",
+                target=tr(self.config.target_language.display_name),
+                sources=source_summary,
+            )
         )
 
     def _validate_start(self) -> str | None:
@@ -296,37 +306,40 @@ class AppController(QObject):
             self.config.obs_overlay_enabled
             and self.config.obs_overlay_port == self.config.llama_port
         ):
-            return "OBS Overlay port 不可與 llama.cpp port 相同"
+            return tr("OBS Overlay port 不可與 llama.cpp port 相同")
         enabled_routes = [route for route in self.config.audio_routes if route.enabled]
         if not enabled_routes:
-            return "請至少啟用一個音訊來源"
+            return tr("請至少啟用一個音訊來源")
         missing_routes = [
             route.label
             for route in enabled_routes
             if not self.audio.is_monitoring(route.id)
         ]
         if missing_routes:
-            return "以下音訊來源尚未成功開啟：" + "、".join(missing_routes)
+            return tr(
+                "以下音訊來源尚未成功開啟：{routes}",
+                routes="、".join(missing_routes),
+            )
         if any(route.source_language not in SOURCE_LANGUAGES for route in enabled_routes):
-            return "音訊來源的語言設定無效"
+            return tr("音訊來源的語言設定無效")
         model_validation = validate_whisper_model(self.config.whisper_model_path)
         if not model_validation.valid:
-            return model_validation.message + "；請在模型設定頁偵測、下載或選取模型"
+            return model_validation.message + tr("；請在模型設定頁偵測、下載或選取模型")
         if (
             not self.config.llama_server_path
             or not Path(self.config.llama_server_path).is_file()
         ):
-            return "找不到 llama-server.exe；請查看 README 的模型準備章節"
+            return tr("找不到 llama-server.exe；請查看 README 的模型準備章節")
         if (
             not self.config.llama_model_path
             or not Path(self.config.llama_model_path).is_file()
         ):
-            return "找不到本機 GGUF 模型；請查看 README 的模型準備與授權章節"
+            return tr("找不到本機 GGUF 模型；請查看 README 的模型準備與授權章節")
         try:
             assert self.config.target_language.code.strip()
             assert self.config.target_language.display_name.strip()
         except AssertionError:
-            return "目標語言代碼與名稱不能空白"
+            return tr("目標語言代碼與名稱不能空白")
         return None
 
     def pause(self) -> None:
@@ -335,14 +348,14 @@ class AppController(QObject):
         self.audio.set_active(False)
         self._running = False
         self.running_changed.emit(False)
-        self.status_changed.emit("已暫停；模型與 session 保持開啟")
+        self.status_changed.emit(tr("已暫停；模型與 session 保持開啟"))
 
     def resume(self) -> None:
         if self.workers_started and self.audio.monitoring:
             self.audio.set_active(True)
             self._running = True
             self.running_changed.emit(True)
-            self.status_changed.emit("已繼續聽讀")
+            self.status_changed.emit(tr("已繼續聽讀"))
             return
         self.start()
 
@@ -369,7 +382,7 @@ class AppController(QObject):
         self._session = None
         self.running_changed.emit(False)
         self.settings_locked_changed.emit(False)
-        self.status_changed.emit("Session 已停止並寫出最新成稿")
+        self.status_changed.emit(tr("Session 已停止並寫出最新成稿"))
 
     def shutdown(self) -> None:
         self.stop()
@@ -378,11 +391,11 @@ class AppController(QObject):
 
     def clear(self) -> None:
         if self.workers_started:
-            self.error_occurred.emit("請先停止 session，再清除畫面")
+            self.error_occurred.emit(tr("請先停止 session，再清除畫面"))
             return
         self._segments.clear()
         self.segments_cleared.emit()
-        self.status_changed.emit("已清除畫面；磁碟上的 session 記錄未刪除")
+        self.status_changed.emit(tr("已清除畫面；磁碟上的 session 記錄未刪除"))
 
     def _on_audio_level(self, route_id: str, level: float) -> None:
         self.route_level_changed.emit(route_id, level)
@@ -399,7 +412,11 @@ class AppController(QObject):
                 {"route_id": route_id, "route_label": label, "message": message},
             )
         self.error_occurred.emit(
-            f"「{label}」{message}。只停止這一路，不會切換到其他裝置。"
+            tr(
+                "「{label}」{message}。只停止這一路，不會切換到其他裝置。",
+                label=label,
+                message=message,
+            )
         )
 
     def _on_audio_segment(
@@ -443,7 +460,7 @@ class AppController(QObject):
             return
         reason = rejection_reason(recognition, ended_at - started_at, self.config)
         if reason:
-            self.status_changed.emit(f"已略過片段：{reason}")
+            self.status_changed.emit(tr("已略過片段：{reason}", reason=tr(reason)))
             return
         raw_text = recognition.text.strip()
         normalized = (
@@ -460,7 +477,9 @@ class AppController(QObject):
             duplicate_key == last_duplicate_key
             and now_monotonic - last_duplicate_at < 8
         ):
-            self.status_changed.emit(f"「{route.label}」已略過短時間內重複的辨識")
+            self.status_changed.emit(
+                tr("「{label}」已略過短時間內重複的辨識", label=route.label)
+            )
             return
         self._last_duplicates[route_id] = (duplicate_key, now_monotonic)
         now = time.time()
@@ -514,7 +533,7 @@ class AppController(QObject):
             segment.last_updated_at = time.time()
             self._record("translation_error", segment)
             self.segment_changed.emit(clone_segment(segment))
-            self.status_changed.emit(returned.error or "翻譯失敗")
+            self.status_changed.emit(returned.error or tr("翻譯失敗"))
             return
         self._make_provisional(segment)
 
@@ -583,7 +602,7 @@ class AppController(QObject):
             else:
                 self._record("revision_checked", segment)
             self.segment_changed.emit(clone_segment(segment))
-        self.status_changed.emit("上下文回修完成")
+        self.status_changed.emit(tr("上下文回修完成"))
         self._finalize_by_count()
 
     @Slot(int, str)
@@ -596,7 +615,7 @@ class AppController(QObject):
                 segment.error = message
                 self._record("revision_error", segment)
                 self.segment_changed.emit(clone_segment(segment))
-        self.status_changed.emit(message + "；已保留初譯")
+        self.status_changed.emit(message + tr("；已保留初譯"))
 
     @Slot()
     def finalize_expired(self, now: float | None = None) -> None:

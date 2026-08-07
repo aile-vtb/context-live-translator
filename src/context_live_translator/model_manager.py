@@ -11,6 +11,7 @@ from huggingface_hub import hf_hub_download, scan_cache_dir
 from tqdm.auto import tqdm
 
 from .config import MODELS_DIR
+from .i18n import tr
 
 WHISPER_REQUIRED_FILES = ("model.bin", "config.json", "tokenizer.json", "vocabulary.txt")
 
@@ -62,10 +63,13 @@ class ModelValidation:
     @property
     def message(self) -> str:
         if self.valid:
-            return f"Whisper CTranslate2 模型有效：{self.path}"
+            return tr("Whisper CTranslate2 模型有效：{path}", path=self.path)
         if not str(self.path).strip() or str(self.path) == ".":
-            return "尚未設定 Whisper CTranslate2 模型目錄"
-        return "Whisper 模型不完整，缺少或無效：" + "、".join(self.missing_files)
+            return tr("尚未設定 Whisper CTranslate2 模型目錄")
+        return tr(
+            "Whisper 模型不完整，缺少或無效：{files}",
+            files="、".join(self.missing_files),
+        )
 
 
 @dataclass(frozen=True)
@@ -156,13 +160,13 @@ def download_whisper_model(
     try:
         spec = WHISPER_MODELS[model_key]
     except KeyError as exc:
-        raise ValueError(f"未知 Whisper 模型：{model_key}") from exc
+        raise ValueError(tr("未知 Whisper 模型：{model}", model=model_key)) from exc
     progress = on_progress or (lambda percent, message: None)
     canceled = cancel_event or threading.Event()
     target = managed_whisper_path(model_key)
     validation = validate_whisper_model(target)
     if validation.valid:
-        progress(100, f"模型已存在：{target}")
+        progress(100, tr("模型已存在：{path}", path=target))
         return target
 
     parent = target.parent
@@ -176,8 +180,11 @@ def download_whisper_model(
     free = shutil.disk_usage(parent).free
     if free < required_free:
         raise OSError(
-            f"磁碟空間不足：至少還需要約 {required_free / 1_000_000:.0f} MB，"
-            f"目前可用 {free / 1_000_000:.0f} MB"
+            tr(
+                "磁碟空間不足：至少還需要約 {required:.0f} MB，目前可用 {free:.0f} MB",
+                required=required_free / 1_000_000,
+                free=free / 1_000_000,
+            )
         )
 
     completed = 0
@@ -187,11 +194,14 @@ def download_whisper_model(
         class CallbackTqdm(tqdm):
             def update(self, count: int = 1) -> bool | None:
                 if canceled.is_set():
-                    raise DownloadCancelled("使用者取消模型下載")
+                    raise DownloadCancelled(tr("使用者取消模型下載"))
                 result = super().update(count)
                 current = min(expected, int(self.n))
                 percent = min(99, round((base + current) / total * 100))
-                progress(percent, f"下載 {filename}：{percent}%")
+                progress(
+                    percent,
+                    tr("下載 {filename}：{percent}%", filename=filename, percent=percent),
+                )
                 return result
 
         return CallbackTqdm
@@ -199,14 +209,20 @@ def download_whisper_model(
     try:
         for filename in WHISPER_REQUIRED_FILES:
             if canceled.is_set():
-                raise DownloadCancelled("使用者取消模型下載")
+                raise DownloadCancelled(tr("使用者取消模型下載"))
             expected = spec.file_sizes[filename]
             existing = staging / filename
             if existing.is_file() and existing.stat().st_size >= expected:
                 completed += expected
-                progress(round(completed / total * 100), f"已驗證 {filename}")
+                progress(
+                    round(completed / total * 100),
+                    tr("已驗證 {filename}", filename=filename),
+                )
                 continue
-            progress(round(completed / total * 100), f"準備下載 {filename}")
+            progress(
+                round(completed / total * 100),
+                tr("準備下載 {filename}", filename=filename),
+            )
             hf_hub_download(
                 repo_id=spec.repo_id,
                 filename=filename,
@@ -215,11 +231,17 @@ def download_whisper_model(
                 tqdm_class=progress_class(filename, completed, expected),
             )
             completed += expected
-            progress(min(99, round(completed / total * 100)), f"已下載 {filename}")
+            progress(
+                min(99, round(completed / total * 100)),
+                tr("已下載 {filename}", filename=filename),
+            )
         validation = validate_whisper_model(staging)
         if not validation.valid:
             raise RuntimeError(
-                "下載完成但模型不完整，缺少：" + ", ".join(validation.missing_files)
+                tr(
+                    "下載完成但模型不完整，缺少：{files}",
+                    files=", ".join(validation.missing_files),
+                )
             )
         if target.exists():
             backup = parent / f".{model_key}.previous"
@@ -235,8 +257,8 @@ def download_whisper_model(
                 shutil.rmtree(backup)
         else:
             os.replace(staging, target)
-        progress(100, f"模型安裝完成：{target}")
+        progress(100, tr("模型安裝完成：{path}", path=target))
         return target
     except DownloadCancelled:
-        progress(0, "模型下載已取消；暫存檔保留供下次續傳")
+        progress(0, tr("模型下載已取消；暫存檔保留供下次續傳"))
         raise

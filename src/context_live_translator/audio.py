@@ -11,6 +11,7 @@ import sounddevice as sd
 import webrtcvad
 from scipy.signal import resample_poly
 
+from .i18n import tr
 from .models import AudioRouteConfig, AudioSource
 
 try:
@@ -208,7 +209,7 @@ class AudioEngine:
 
     def _open_loopback(self, source: AudioSource) -> None:
         if sc is None:
-            raise RuntimeError("SoundCard 無法載入，不能使用系統播放擷取")
+            raise RuntimeError(tr("SoundCard 無法載入，不能使用系統播放擷取"))
         self._loopback_stop.clear()
         self._loopback_thread = threading.Thread(
             target=self._loopback_run,
@@ -220,7 +221,7 @@ class AudioEngine:
         # Give the backend a short opportunity to report an invalid endpoint.
         time.sleep(0.05)
         if not self._loopback_thread.is_alive():
-            raise RuntimeError("無法開啟選定的 Windows 播放裝置")
+            raise RuntimeError(tr("無法開啟選定的 Windows 播放裝置"))
 
     def _loopback_run(self, source: AudioSource) -> None:
         def noop() -> None:
@@ -232,7 +233,7 @@ class AudioEngine:
             assert sc is not None
             microphone = sc.get_microphone(source.backend_id, include_loopback=True)
             if not bool(getattr(microphone, "isloopback", False)):
-                raise RuntimeError("選定端點不是 WASAPI loopback 裝置")
+                raise RuntimeError(tr("選定端點不是 WASAPI loopback 裝置"))
             with microphone.recorder(
                 samplerate=source.sample_rate,
                 blocksize=1024,
@@ -242,7 +243,7 @@ class AudioEngine:
                     self._process_data(np.asarray(data), source.sample_rate)
         except Exception as exc:
             if not self._loopback_stop.is_set():
-                self._report_error(f"系統播放擷取中斷：{exc}")
+                self._report_error(tr("系統播放擷取中斷：{error}", error=exc))
         finally:
             uninitialize_com()
 
@@ -287,7 +288,7 @@ class AudioEngine:
         sample_rate: int,
     ) -> None:
         if status:
-            self._report_error(f"音訊裝置回報錯誤：{status}")
+            self._report_error(tr("音訊裝置回報錯誤：{status}", status=status))
             return
         self._process_data(data, sample_rate)
 
@@ -417,7 +418,9 @@ class AudioCaptureManager:
                 None,
             )
         if duplicate:
-            raise ValueError(f"同一音訊來源已由 route「{duplicate}」監聽")
+            raise ValueError(
+                tr("同一音訊來源已由 route「{route}」監聽", route=duplicate)
+            )
         engine = AudioEngine(
             on_level=lambda level, route_id=route.id: self.on_level(route_id, level),
             on_segment=lambda audio, started, ended, language, route_id=route.id: (

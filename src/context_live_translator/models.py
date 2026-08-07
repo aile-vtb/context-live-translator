@@ -4,6 +4,8 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any
 
+from .i18n import tr
+
 
 @dataclass(frozen=True)
 class LanguageSpec:
@@ -65,7 +67,7 @@ class AudioSource:
 
     @property
     def label(self) -> str:
-        suffix = "系統播放" if self.is_loopback else self.host_api
+        suffix = tr("系統播放") if self.is_loopback else self.host_api
         return f"{self.name} — {suffix}, {self.channels} ch, {self.sample_rate} Hz"
 
 

@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .i18n import DEFAULT_UI_LANGUAGE, normalize_ui_language
 from .models import (
     SOURCE_LANGUAGES,
     TARGET_LANGUAGES,
@@ -23,6 +24,7 @@ MODELS_DIR = APP_DIR / "models"
 
 @dataclass
 class AppConfig:
+    ui_language: str = DEFAULT_UI_LANGUAGE
     audio_source_fingerprint: str = ""
     source_language: str = "auto"
     target_language_code: str = "zh-TW"
@@ -107,6 +109,7 @@ def load_config(path: Path = CONFIG_PATH) -> AppConfig:
         return AppConfig()
     if config.source_language not in SOURCE_LANGUAGES:
         config.source_language = "auto"
+    config.ui_language = normalize_ui_language(config.ui_language)
     if config.whisper_device not in {"auto", "cuda", "cpu"}:
         config.whisper_device = "auto"
     config.audio_routes = normalize_audio_routes(config.audio_routes)

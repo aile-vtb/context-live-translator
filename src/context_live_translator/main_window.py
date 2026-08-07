@@ -45,6 +45,14 @@ from .audio import (
 from .config import AppConfig, normalize_audio_routes, save_config
 from .controller import AppController
 from .doctor import format_checks, run_doctor
+from .i18n import (
+    COMBO_KEY_ROLE,
+    UI_LANGUAGES,
+    localize_widget_tree,
+    normalize_ui_language,
+    set_ui_language,
+    tr,
+)
 from .model_manager import (
     WHISPER_MODELS,
     DownloadCancelled,
@@ -73,7 +81,7 @@ from .updates import (
     select_latest_release,
 )
 
-STATUS_LABELS = {
+STATUS_LABEL_KEYS = {
     SegmentStatus.RECOGNIZED: "已辨識",
     SegmentStatus.TRANSLATING: "翻譯中",
     SegmentStatus.PROVISIONAL: "暫定",
@@ -135,7 +143,7 @@ class AudioRouteCard(QFrame):
         self._on_device = on_device
         self.setFrameShape(QFrame.Shape.StyledPanel)
         grid = QGridLayout(self)
-        self.enabled = QCheckBox(f"啟用 · ID: {route.id}")
+        self.enabled = QCheckBox(tr("啟用 · ID: {route_id}", route_id=route.id))
         self.enabled.setChecked(route.enabled)
         self.label_edit = QLineEdit(route.label)
         self.label_edit.setPlaceholderText("例如：我的麥克風、Discord 朋友")
@@ -190,15 +198,20 @@ class AudioRouteCard(QFrame):
     def populate_sources(self, sources: list[AudioSource], fingerprint: str) -> bool:
         self.device_combo.blockSignals(True)
         self.device_combo.clear()
-        self.device_combo.addItem("請選擇音訊來源", None)
-        for group_kind, group_name in (
+        empty_source = "請選擇音訊來源"
+        self.device_combo.addItem(tr(empty_source), None)
+        self.device_combo.setItemData(0, empty_source, COMBO_KEY_ROLE)
+        for group_kind, group_key in (
             ("input", "── 麥克風／音訊介面／虛擬輸入 ──"),
             ("loopback", "── Windows 系統播放端點 ──"),
         ):
             group = [source for source in sources if source.kind == group_kind]
             if not group:
                 continue
-            self.device_combo.addItem(group_name, None)
+            self.device_combo.addItem(tr(group_key), None)
+            self.device_combo.setItemData(
+                self.device_combo.count() - 1, group_key, COMBO_KEY_ROLE
+            )
             header = self.device_combo.model().item(self.device_combo.count() - 1)
             if header:
                 header.setEnabled(False)
@@ -219,6 +232,14 @@ class AudioRouteCard(QFrame):
         if match:
             self._device_changed(match)
         return bool(match)
+
+    def retranslate(self) -> None:
+        self.enabled.setText(tr("啟用 · ID: {route_id}", route_id=self.route_id))
+        localize_widget_tree(self)
+        for index in range(self.device_combo.count()):
+            source = self.device_combo.itemData(index)
+            if isinstance(source, AudioSource):
+                self.device_combo.setItemText(index, source.label)
 
     def route_config(self) -> AudioRouteConfig:
         source = self.device_combo.currentData()
@@ -292,34 +313,38 @@ class SegmentCard(QFrame):
         self.update_segment(segment)
 
     def update_segment(self, segment: TranscriptSegment) -> None:
+        self.segment = segment
         stamp = datetime.fromtimestamp(segment.started_at).strftime("%H:%M:%S")
         self.time_label.setText(stamp)
         confidence = f"{segment.language_probability:.0%}"
-        uncertain = " · 語言不確定" if segment.source_language_uncertain else ""
+        uncertain = f" · {tr('語言不確定')}" if segment.source_language_uncertain else ""
         self.language_label.setText(
             f"{segment.route_label} · {segment.source_language} · {confidence}{uncertain}"
         )
-        status = STATUS_LABELS[segment.status]
+        status = tr(STATUS_LABEL_KEYS[segment.status])
         if segment.revision:
-            status += f" · 修訂 {segment.revision}"
+            status += f" · {tr('修訂 {revision}', revision=segment.revision)}"
         self.status_label.setText(status)
         color = STATUS_COLORS[segment.status]
         self.status_label.setStyleSheet(f"font-weight: 700; color: {color};")
-        source_prefix = "來源（已依上下文修訂）" if segment.revision else "來源"
+        source_prefix = tr("來源（已依上下文修訂）" if segment.revision else "來源")
         self.source_label.setText(f"{source_prefix}：{segment.source_text}")
         self.source_label.setToolTip(
-            f"Whisper 原始辨識：{segment.raw_asr_text}"
+            tr("Whisper 原始辨識：{text}", text=segment.raw_asr_text)
             if segment.source_text != segment.raw_asr_text
             else ""
         )
         if segment.translation:
             self.translation_label.setText(
-                f"{segment.target_language.display_name}：{segment.translation}"
+                f"{tr(segment.target_language.display_name)}：{segment.translation}"
             )
         else:
             self.translation_label.setText(
                 segment.error
-                or f"{segment.target_language.display_name}：翻譯中…"
+                or tr(
+                    "{language}：翻譯中…",
+                    language=tr(segment.target_language.display_name),
+                )
             )
         self.translation_label.setStyleSheet(
             "font-size: 16px; font-weight: 600;"
@@ -327,11 +352,16 @@ class SegmentCard(QFrame):
         )
         self.setToolTip(segment.error or "")
 
+    def retranslate(self) -> None:
+        self.update_segment(self.segment)
+
 
 class MainWindow(QMainWindow):
     def __init__(self, config: AppConfig) -> None:
         super().__init__()
         self.config = config
+        self.config.ui_language = normalize_ui_language(config.ui_language)
+        set_ui_language(self.config.ui_language)
         self.config.audio_routes = normalize_audio_routes(config.audio_routes)
         self.controller = AppController(config)
         self.sources: list[AudioSource] = []
@@ -343,6 +373,8 @@ class MainWindow(QMainWindow):
         self._update_reply: QNetworkReply | None = None
         self._update_checked = False
         self._update_timed_out = False
+        self._last_update_release: ReleaseInfo | None = None
+        self._last_update_error: str | None = None
         self._about_tab_index = -1
         self._update_timeout = QTimer(self)
         self._update_timeout.setSingleShot(True)
@@ -359,6 +391,7 @@ class MainWindow(QMainWindow):
         self._build_overlay_tab()
         self._build_diagnostics_tab()
         self._build_about_tab()
+        self._apply_ui_language(initial=True)
         self._connect_controller()
         self.tabs.currentChanged.connect(self._tab_changed)
         QTimer.singleShot(0, self.refresh_sources)
@@ -368,6 +401,20 @@ class MainWindow(QMainWindow):
     def _build_main_tab(self) -> None:
         page = QWidget()
         layout = QVBoxLayout(page)
+
+        interface_row = QHBoxLayout()
+        interface_row.addStretch()
+        self.ui_language_label = QLabel("介面語言")
+        self.ui_language_combo = QComboBox()
+        self.ui_language_combo.setProperty("i18n_skip", True)
+        for code, label in UI_LANGUAGES:
+            self.ui_language_combo.addItem(label, code)
+        self.ui_language_combo.setCurrentIndex(
+            max(0, self.ui_language_combo.findData(self.config.ui_language))
+        )
+        interface_row.addWidget(self.ui_language_label)
+        interface_row.addWidget(self.ui_language_combo)
+        layout.addLayout(interface_row)
 
         language_box = QGroupBox("字幕輸出語言（所有音訊來源共用）")
         language_form = QGridLayout(language_box)
@@ -449,7 +496,57 @@ class MainWindow(QMainWindow):
         self.pause_button.clicked.connect(self.controller.pause)
         self.stop_button.clicked.connect(self.controller.stop)
         self.clear_button.clicked.connect(self.controller.clear)
+        self.ui_language_combo.currentIndexChanged.connect(self._ui_language_changed)
         self._target_changed()
+
+    def _ui_language_changed(self, *_: object) -> None:
+        language = normalize_ui_language(str(self.ui_language_combo.currentData()))
+        if language == self.config.ui_language:
+            return
+        self.config.ui_language = language
+        set_ui_language(language)
+        save_config(self.config)
+        self._apply_ui_language()
+
+    def _apply_ui_language(self, *, initial: bool = False) -> None:
+        set_ui_language(self.config.ui_language)
+        localize_widget_tree(self)
+        for card in self.route_cards.values():
+            card.retranslate()
+        self._sync_buttons()
+        for card in self.segment_items.values():
+            card[1].retranslate()
+        if self._last_update_release is not None:
+            self._show_update_release(self._last_update_release)
+        elif self._last_update_error is not None:
+            self._show_update_error(self._last_update_error)
+        elif self._update_reply is not None:
+            self.about_latest_version.setText(tr("檢查中…"))
+            self.about_update_status.setText(tr("正在連線 GitHub Releases…"))
+        else:
+            self.about_latest_version.setText(tr("尚未檢查"))
+            self.about_update_status.setText(
+                tr("開啟此分頁後會向 GitHub 檢查公開 Release；音訊與字幕不會上傳。")
+            )
+        if hasattr(self, "doctor_output") and not initial:
+            self.doctor_output.setPlainText(
+                tr("請重新執行診斷以顯示目前語言的結果。")
+            )
+        if not initial:
+            self.status.setText(tr("介面語言已切換。"))
+            if self._download_thread and self._download_thread.isRunning():
+                self.whisper_download_status.setText(tr("下載進行中…"))
+            elif self.controller.workers_started:
+                self.whisper_download_status.setText(
+                    validate_whisper_model(self.whisper_path.text().strip()).message
+                )
+            else:
+                self._detect_whisper_models(adopt_if_missing=False)
+            self.overlay_status.setText(
+                tr("運作中：{url}", url=self.controller.obs_overlay_url)
+                if self.controller.overlay_running
+                else tr("尚未啟用")
+            )
 
     def _build_model_tab(self) -> None:
         page = QWidget()
@@ -647,9 +744,10 @@ class MainWindow(QMainWindow):
             return
         self._update_checked = True
         self._update_timed_out = False
+        self._last_update_error = None
         self.about_check_button.setEnabled(False)
-        self.about_latest_version.setText("檢查中…")
-        self.about_update_status.setText("正在連線 GitHub Releases…")
+        self.about_latest_version.setText(tr("檢查中…"))
+        self.about_update_status.setText(tr("正在連線 GitHub Releases…"))
         self.about_update_status.setStyleSheet("")
 
         request = QNetworkRequest(QUrl(RELEASES_API_URL + "?per_page=10"))
@@ -683,7 +781,7 @@ class MainWindow(QMainWindow):
         self.about_check_button.setEnabled(True)
         try:
             if self._update_timed_out:
-                raise RuntimeError("連線逾時")
+                raise RuntimeError(tr("連線逾時"))
             if reply.error() != QNetworkReply.NetworkError.NoError:
                 raise RuntimeError(reply.errorString())
             payload = json.loads(bytes(reply.readAll()).decode("utf-8"))
@@ -694,32 +792,36 @@ class MainWindow(QMainWindow):
             reply.deleteLater()
 
     def _show_update_release(self, release: ReleaseInfo) -> None:
+        self._last_update_release = release
+        self._last_update_error = None
         self.about_latest_version.setText(
             f"{release.tag_name}" + ("（Pre-release）" if release.prerelease else "")
         )
         state = compare_release(self._installed_version, release)
         if state == UpdateState.UPDATE_AVAILABLE:
             self.about_update_status.setText(
-                f"有新版本 {release.tag_name}，請至 GitHub Releases 下載更新。"
+                tr("有新版本 {tag}，請至 GitHub Releases 下載更新。", tag=release.tag_name)
             )
             self.about_update_status.setStyleSheet(
                 "color: #b45309; font-weight: 600;"
             )
         elif state == UpdateState.CURRENT:
-            self.about_update_status.setText("目前已是最新版本。")
+            self.about_update_status.setText(tr("目前已是最新版本。"))
             self.about_update_status.setStyleSheet(
                 "color: #15803d; font-weight: 600;"
             )
         else:
             self.about_update_status.setText(
-                "目前版本比 GitHub 最新 Release 新，可能是尚未發布的開發版。"
+                tr("目前版本比 GitHub 最新 Release 新，可能是尚未發布的開發版。")
             )
             self.about_update_status.setStyleSheet("color: #2563eb;")
 
     def _show_update_error(self, message: str) -> None:
-        self.about_latest_version.setText("無法取得")
+        self._last_update_release = None
+        self._last_update_error = message
+        self.about_latest_version.setText(tr("無法取得"))
         self.about_update_status.setText(
-            f"暫時無法檢查更新，不影響離線使用：{message}"
+            tr("暫時無法檢查更新，不影響離線使用：{message}", message=message)
         )
         self.about_update_status.setStyleSheet("color: #64748b;")
 
@@ -867,7 +969,7 @@ class MainWindow(QMainWindow):
 
     def _copy_overlay_url(self) -> None:
         QGuiApplication.clipboard().setText(self.overlay_url.text())
-        self.overlay_status.setText("已複製 Browser Source URL")
+        self.overlay_status.setText(tr("已複製 Browser Source URL"))
 
     def _open_overlay_url(self) -> None:
         QDesktopServices.openUrl(QUrl(self.overlay_url.text()))
@@ -924,13 +1026,14 @@ class MainWindow(QMainWindow):
                     missing.append(route.label)
             if missing:
                 self._set_status(
-                    "先前選定的音訊來源目前不存在："
-                    + "、".join(missing)
-                    + "；不會自動改用預設麥克風"
+                    tr(
+                        "先前選定的音訊來源目前不存在：{names}；不會自動改用預設麥克風",
+                        names="、".join(missing),
+                    )
                 )
         except Exception as exc:
             self.sources = []
-            self._set_status(f"列出音訊來源失敗：{exc}")
+            self._set_status(tr("列出音訊來源失敗：{error}", error=exc))
 
     def _create_route_card(self, route: AudioRouteConfig) -> None:
         card = AudioRouteCard(
@@ -942,6 +1045,7 @@ class MainWindow(QMainWindow):
         )
         self.route_cards[route.id] = card
         self.routes_layout.addWidget(card)
+        card.retranslate()
         if len(self.route_cards) == 1:
             self._set_legacy_route_aliases(card)
 
@@ -956,7 +1060,7 @@ class MainWindow(QMainWindow):
     def _add_route(self) -> None:
         route = AudioRouteConfig(
             id=f"route-{uuid.uuid4().hex[:8]}",
-            label=f"音訊來源 {len(self.route_cards) + 1}",
+            label=tr("音訊來源 {number}", number=len(self.route_cards) + 1),
         )
         self.config.audio_routes.append(route)
         self._create_route_card(route)
@@ -965,7 +1069,7 @@ class MainWindow(QMainWindow):
     def _remove_route(self, route_id: str) -> None:
         if self.controller.workers_started or len(self.route_cards) <= 1:
             if len(self.route_cards) <= 1:
-                self._show_error("至少保留一個音訊來源")
+                self._show_error(tr("至少保留一個音訊來源"))
             return
         self.controller.close_route(route_id)
         card = self.route_cards.pop(route_id)
@@ -1031,7 +1135,7 @@ class MainWindow(QMainWindow):
             code = self.custom_target_code.text().strip()
             name = self.custom_target_name.text().strip()
             if not code or not name:
-                self._show_error("自訂目標語言必須填寫代碼與顯示名稱")
+                self._show_error(tr("自訂目標語言必須填寫代碼與顯示名稱"))
                 return False
             self.config.target_language_code = code
             self.config.target_language_name = name
@@ -1099,7 +1203,7 @@ class MainWindow(QMainWindow):
     def _sync_buttons(self) -> None:
         running = self.controller.running
         workers = self.controller.workers_started
-        self.start_button.setText("繼續" if workers and not running else "開始")
+        self.start_button.setText(tr("繼續" if workers and not running else "開始"))
         self.start_button.setEnabled(not running)
         self.pause_button.setEnabled(running)
         self.stop_button.setEnabled(workers)
@@ -1158,7 +1262,7 @@ class MainWindow(QMainWindow):
     def _browse_whisper(self) -> None:
         directory = QFileDialog.getExistingDirectory(
             self,
-            "選擇本機 Whisper CTranslate2 模型目錄",
+            tr("選擇本機 Whisper CTranslate2 模型目錄"),
             self.whisper_path.text(),
         )
         if directory:
@@ -1166,31 +1270,38 @@ class MainWindow(QMainWindow):
             validation = validate_whisper_model(directory)
             self.whisper_download_status.setText(validation.message)
 
-    def _detect_whisper_models(self) -> None:
+    def _detect_whisper_models(self, *, adopt_if_missing: bool = True) -> None:
         current = self.whisper_path.text().strip()
         models = discover_whisper_models()
         self.whisper_detected.clear()
         for model in models:
-            origin = "管理位置" if model.origin == "managed" else "Hugging Face cache"
+            origin = tr("管理位置") if model.origin == "managed" else "Hugging Face cache"
             size_mb = model.total_bytes / 1_000_000
             self.whisper_detected.addItem(
                 f"{model.key} · {origin} · {size_mb:.0f} MB",
                 str(model.path),
             )
         current_valid = validate_whisper_model(current).valid
-        if models and not current_valid:
+        if models and not current_valid and adopt_if_missing:
             self.whisper_path.setText(str(models[0].path))
             self.config.whisper_model_path = str(models[0].path)
             self.whisper_download_status.setText(
-                f"已自動採用偵測到的既有模型：{models[0].path}"
+                tr("已自動採用偵測到的既有模型：{path}", path=models[0].path)
+            )
+        elif models and current_valid:
+            self.whisper_download_status.setText(
+                tr("找到 {count} 個可用模型；目前設定有效。", count=len(models))
             )
         elif models:
             self.whisper_download_status.setText(
-                f"找到 {len(models)} 個可用模型；目前設定有效。"
+                tr(
+                    "找到 {count} 個可用模型；目前設定無效，請選擇偵測結果。",
+                    count=len(models),
+                )
             )
         else:
             self.whisper_download_status.setText(
-                "未找到完整模型；可選擇本機目錄，或明確按下下載。"
+                tr("未找到完整模型；可選擇本機目錄，或明確按下下載。")
             )
         self.whisper_use_detected.setEnabled(bool(models))
 
@@ -1200,7 +1311,7 @@ class MainWindow(QMainWindow):
             self.whisper_path.setText(str(path))
             self.config.whisper_model_path = str(path)
             save_config(self.config)
-            self.whisper_download_status.setText(f"已選用：{path}")
+            self.whisper_download_status.setText(tr("已選用：{path}", path=path))
 
     def _start_whisper_download(self) -> None:
         if self._download_thread and self._download_thread.isRunning():
@@ -1215,12 +1326,14 @@ class MainWindow(QMainWindow):
         free_mb = shutil.disk_usage(disk_probe).free / 1_000_000
         answer = QMessageBox.question(
             self,
-            "下載 Whisper 模型",
-            f"來源：Hugging Face / {spec.repo_id}\n"
-            f"大小：約 {size_mb:.0f} MB；磁碟可用：約 {free_mb:.0f} MB\n"
-            f"目的地：{destination}\n\n"
-            "small 建議即時使用；CPU 模式不保證即時。請先確認模型頁授權與來源。"
-            "是否繼續？",
+            tr("下載 Whisper 模型"),
+            tr("來源：Hugging Face / {repo}", repo=spec.repo_id)
+            + "\n"
+            + tr("大小：約 {size:.0f} MB；磁碟可用：約 {free:.0f} MB", size=size_mb, free=free_mb)
+            + "\n"
+            + tr("目的地：{destination}", destination=destination)
+            + "\n\n"
+            + tr("small 建議即時使用；CPU 模式不保證即時。請先確認模型頁授權與來源。是否繼續？"),
         )
         if answer != QMessageBox.StandardButton.Yes:
             return
@@ -1237,7 +1350,7 @@ class MainWindow(QMainWindow):
     def _cancel_whisper_download(self) -> None:
         if self._download_thread:
             self._download_thread.cancel()
-            self.whisper_download_status.setText("正在取消；目前檔案完成後會停止…")
+            self.whisper_download_status.setText(tr("正在取消；目前檔案完成後會停止…"))
 
     def _download_progress(self, percent: int, message: str) -> None:
         self.whisper_progress.setValue(percent)
@@ -1248,17 +1361,17 @@ class MainWindow(QMainWindow):
         self.whisper_path.setText(path)
         self.config.whisper_model_path = path
         save_config(self.config)
-        self.whisper_download_status.setText(f"模型安裝完成：{path}")
+        self.whisper_download_status.setText(tr("模型安裝完成：{path}", path=path))
         self._detect_whisper_models()
 
     def _download_failed(self, message: str) -> None:
-        self.whisper_download_status.setText(f"模型下載失敗：{message}")
-        self._show_error(f"Whisper 模型下載失敗：{message}")
+        self.whisper_download_status.setText(tr("模型下載失敗：{message}", message=message))
+        self._show_error(tr("Whisper 模型下載失敗：{message}", message=message))
 
     def _download_cancelled(self) -> None:
         self.whisper_progress.setValue(0)
         self.whisper_download_status.setText(
-            "模型下載已取消；暫存檔保留，下次下載可續用。"
+            tr("模型下載已取消；暫存檔保留，下次下載可續用。")
         )
 
     def _download_finished(self) -> None:
@@ -1279,7 +1392,7 @@ class MainWindow(QMainWindow):
     def _browse_file(self, target: QLineEdit, filter_text: str) -> None:
         filename, _ = QFileDialog.getOpenFileName(
             self,
-            "選擇本機檔案",
+            tr("選擇本機檔案"),
             target.text(),
             filter_text,
         )

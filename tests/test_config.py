@@ -37,6 +37,14 @@ def test_save_and_load_custom_target(tmp_path) -> None:
     assert not path.with_suffix(".tmp").exists()
 
 
+def test_ui_language_round_trip_and_invalid_value_falls_back(tmp_path) -> None:
+    path = tmp_path / "config.json"
+    save_config(AppConfig(ui_language="ja"), path)
+    assert load_config(path).ui_language == "ja"
+    path.write_text(json.dumps({"ui_language": "invalid"}), encoding="utf-8")
+    assert load_config(path).ui_language == "zh-TW"
+
+
 def test_corrupt_config_returns_defaults(tmp_path) -> None:
     path = tmp_path / "config.json"
     path.write_text("{broken", encoding="utf-8")

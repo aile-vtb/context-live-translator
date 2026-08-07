@@ -13,6 +13,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 
 from .config import AppConfig
+from .i18n import tr
 from .models import TranscriptSegment
 
 OVERLAY_HOST = "127.0.0.1"
@@ -154,14 +155,18 @@ class OverlayServer:
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             if self._error:
-                raise RuntimeError(f"OBS overlay 啟動失敗：{self._error}") from self._error
+                raise RuntimeError(
+                    tr("OBS overlay 啟動失敗：{error}", error=self._error)
+                ) from self._error
             if self._server and self._server.started:
                 return
             if not self._thread.is_alive():
                 break
             time.sleep(0.02)
         self.stop()
-        raise RuntimeError(f"OBS overlay 無法在 {OVERLAY_HOST}:{self.port} 啟動")
+        raise RuntimeError(
+            tr("OBS overlay 無法在 {host}:{port} 啟動", host=OVERLAY_HOST, port=self.port)
+        )
 
     def _ensure_port_available(self) -> None:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
@@ -169,7 +174,10 @@ class OverlayServer:
                 probe.bind((OVERLAY_HOST, self.port))
             except OSError as exc:
                 raise RuntimeError(
-                    f"localhost:{self.port} 已被占用，請關閉舊程式或更換連接埠"
+                    tr(
+                        "localhost:{port} 已被占用，請關閉舊程式或更換連接埠",
+                        port=self.port,
+                    )
                 ) from exc
 
     def _run(self) -> None:
@@ -244,13 +252,13 @@ class OverlayServer:
                 "started_at": 0,
                 "source_language": "en",
                 "source_text": "Context-aware live translation preview",
-                "target_language": "繁中",
-                "translation": "具備上下文回修的即時翻譯預覽",
+                "target_language": tr("繁中"),
+                "translation": tr("具備上下文回修的即時翻譯預覽"),
                 "status": "provisional",
                 "revision": 0,
                 "source_language_uncertain": False,
                 "route_id": "preview",
-                "route_label": "預覽",
+                "route_label": tr("預覽"),
                 "context_group_id": "conversation",
             }
         )
