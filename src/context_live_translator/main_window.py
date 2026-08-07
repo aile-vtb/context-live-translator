@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import shutil
 import threading
 import uuid
@@ -9,6 +10,7 @@ from functools import partial
 
 from PySide6.QtCore import Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import QCloseEvent, QColor, QDesktopServices, QGuiApplication
+from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -34,7 +36,6 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import __version__
 from .audio import (
     MAX_GAIN_DB,
     list_audio_sources,
@@ -61,6 +62,16 @@ from .models import (
     TranscriptSegment,
 )
 from .resources import application_icon
+from .updates import (
+    PROJECT_URL,
+    RELEASES_API_URL,
+    RELEASES_URL,
+    ReleaseInfo,
+    UpdateState,
+    compare_release,
+    installed_version,
+    select_latest_release,
+)
 
 STATUS_LABELS = {
     SegmentStatus.RECOGNIZED: "已辨識",
@@ -327,9 +338,18 @@ class MainWindow(QMainWindow):
         self.route_cards: dict[str, AudioRouteCard] = {}
         self._download_thread: ModelDownloadThread | None = None
         self._close_after_download = False
+        self._installed_version = installed_version()
+        self._network_manager = QNetworkAccessManager(self)
+        self._update_reply: QNetworkReply | None = None
+        self._update_checked = False
+        self._update_timed_out = False
+        self._about_tab_index = -1
+        self._update_timeout = QTimer(self)
+        self._update_timeout.setSingleShot(True)
+        self._update_timeout.timeout.connect(self._update_check_timeout)
         self.segment_items: dict[str, tuple[QListWidgetItem, SegmentCard]] = {}
         self._closing = False
-        self.setWindowTitle(f"Context Live Translator v{__version__}")
+        self.setWindowTitle(f"Context Live Translator v{self._installed_version}")
         self.setWindowIcon(application_icon())
         self.resize(1060, 820)
         self.tabs = QTabWidget()
@@ -338,7 +358,9 @@ class MainWindow(QMainWindow):
         self._build_model_tab()
         self._build_overlay_tab()
         self._build_diagnostics_tab()
+        self._build_about_tab()
         self._connect_controller()
+        self.tabs.currentChanged.connect(self._tab_changed)
         QTimer.singleShot(0, self.refresh_sources)
         QTimer.singleShot(0, self._detect_whisper_models)
         QTimer.singleShot(0, self._initialize_overlay)
@@ -552,6 +574,154 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.doctor_button)
         self.tabs.addTab(page, "診斷")
         self.doctor_button.clicked.connect(self._run_doctor)
+
+    def _build_about_tab(self) -> None:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(40, 32, 40, 32)
+
+        logo = QLabel()
+        logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        logo.setPixmap(application_icon().pixmap(128, 128))
+        layout.addWidget(logo)
+
+        title = QLabel("Context Live Translator")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title.setStyleSheet("font-size: 26px; font-weight: 700;")
+        layout.addWidget(title)
+
+        author = QLabel(
+            '作者／維護者：<a href="https://github.com/aile-vtb">aile-vtb</a>'
+        )
+        author.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        author.setOpenExternalLinks(True)
+        layout.addWidget(author)
+
+        version_box = QGroupBox("版本資訊")
+        version_form = QFormLayout(version_box)
+        self.about_local_version = QLabel(f"v{self._installed_version}")
+        self.about_latest_version = QLabel("尚未檢查")
+        self.about_update_status = QLabel(
+            "開啟此分頁後會向 GitHub 檢查公開 Release；音訊與字幕不會上傳。"
+        )
+        self.about_update_status.setWordWrap(True)
+        version_form.addRow("目前版本", self.about_local_version)
+        version_form.addRow("GitHub 最新版本", self.about_latest_version)
+        version_form.addRow("狀態", self.about_update_status)
+        layout.addWidget(version_box)
+
+        buttons = QHBoxLayout()
+        self.about_check_button = QPushButton("重新檢查")
+        self.about_releases_button = QPushButton("前往 GitHub Releases")
+        self.about_project_button = QPushButton("專案首頁")
+        buttons.addStretch()
+        buttons.addWidget(self.about_check_button)
+        buttons.addWidget(self.about_releases_button)
+        buttons.addWidget(self.about_project_button)
+        buttons.addStretch()
+        layout.addLayout(buttons)
+
+        license_label = QLabel(
+            "本專案程式碼採 MIT License；模型與其他第三方內容依各自條款授權。"
+        )
+        license_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        license_label.setWordWrap(True)
+        layout.addWidget(license_label)
+        layout.addStretch()
+
+        self._about_tab_index = self.tabs.addTab(page, "About")
+        self.about_check_button.clicked.connect(self._start_update_check)
+        self.about_releases_button.clicked.connect(
+            lambda: QDesktopServices.openUrl(QUrl(RELEASES_URL))
+        )
+        self.about_project_button.clicked.connect(
+            lambda: QDesktopServices.openUrl(QUrl(PROJECT_URL))
+        )
+
+    def _tab_changed(self, index: int) -> None:
+        if index == self._about_tab_index and not self._update_checked:
+            self._start_update_check()
+
+    def _start_update_check(self) -> None:
+        if self._update_reply is not None:
+            return
+        self._update_checked = True
+        self._update_timed_out = False
+        self.about_check_button.setEnabled(False)
+        self.about_latest_version.setText("檢查中…")
+        self.about_update_status.setText("正在連線 GitHub Releases…")
+        self.about_update_status.setStyleSheet("")
+
+        request = QNetworkRequest(QUrl(RELEASES_API_URL + "?per_page=10"))
+        request.setRawHeader(b"Accept", b"application/vnd.github+json")
+        request.setRawHeader(b"X-GitHub-Api-Version", b"2026-03-10")
+        request.setRawHeader(
+            b"User-Agent",
+            f"ContextLiveTranslator/{self._installed_version}".encode("ascii", "replace"),
+        )
+        request.setAttribute(
+            QNetworkRequest.Attribute.RedirectPolicyAttribute,
+            QNetworkRequest.RedirectPolicy.NoLessSafeRedirectPolicy,
+        )
+        self._update_reply = self._network_manager.get(request)
+        self._update_reply.finished.connect(self._update_check_finished)
+        self._update_timeout.start(6000)
+
+    def _update_check_timeout(self) -> None:
+        reply = self._update_reply
+        if reply is None:
+            return
+        self._update_timed_out = True
+        reply.abort()
+
+    def _update_check_finished(self) -> None:
+        reply = self._update_reply
+        if reply is None:
+            return
+        self._update_timeout.stop()
+        self._update_reply = None
+        self.about_check_button.setEnabled(True)
+        try:
+            if self._update_timed_out:
+                raise RuntimeError("連線逾時")
+            if reply.error() != QNetworkReply.NetworkError.NoError:
+                raise RuntimeError(reply.errorString())
+            payload = json.loads(bytes(reply.readAll()).decode("utf-8"))
+            self._show_update_release(select_latest_release(payload))
+        except (ValueError, RuntimeError, json.JSONDecodeError) as exc:
+            self._show_update_error(str(exc))
+        finally:
+            reply.deleteLater()
+
+    def _show_update_release(self, release: ReleaseInfo) -> None:
+        self.about_latest_version.setText(
+            f"{release.tag_name}" + ("（Pre-release）" if release.prerelease else "")
+        )
+        state = compare_release(self._installed_version, release)
+        if state == UpdateState.UPDATE_AVAILABLE:
+            self.about_update_status.setText(
+                f"有新版本 {release.tag_name}，請至 GitHub Releases 下載更新。"
+            )
+            self.about_update_status.setStyleSheet(
+                "color: #b45309; font-weight: 600;"
+            )
+        elif state == UpdateState.CURRENT:
+            self.about_update_status.setText("目前已是最新版本。")
+            self.about_update_status.setStyleSheet(
+                "color: #15803d; font-weight: 600;"
+            )
+        else:
+            self.about_update_status.setText(
+                "目前版本比 GitHub 最新 Release 新，可能是尚未發布的開發版。"
+            )
+            self.about_update_status.setStyleSheet("color: #2563eb;")
+
+    def _show_update_error(self, message: str) -> None:
+        self.about_latest_version.setText("無法取得")
+        self.about_update_status.setText(
+            f"暫時無法檢查更新，不影響離線使用：{message}"
+        )
+        self.about_update_status.setStyleSheet("color: #64748b;")
 
     def _build_overlay_tab(self) -> None:
         page = QWidget()
@@ -1129,6 +1299,15 @@ class MainWindow(QMainWindow):
             event.ignore()
             return
         self._closing = True
+        self._update_timeout.stop()
+        if self._update_reply is not None:
+            try:
+                self._update_reply.finished.disconnect(self._update_check_finished)
+            except (RuntimeError, TypeError):
+                pass
+            self._update_reply.abort()
+            self._update_reply.deleteLater()
+            self._update_reply = None
         if self._read_widgets():
             save_config(self.config)
         self.controller.shutdown()

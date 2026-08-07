@@ -9,6 +9,7 @@ webrtcvad-wheels==2.0.14
 faster-whisper==1.2.1
 ctranslate2==4.8.1
 httpx==0.28.1
+packaging==26.3
 opencc-python-reimplemented==0.1.7
 huggingface-hub==1.26.0
 tqdm==4.70.0

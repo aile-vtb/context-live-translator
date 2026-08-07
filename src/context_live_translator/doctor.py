@@ -169,7 +169,8 @@ def run_doctor(config: AppConfig) -> list[DiagnosticCheck]:
         DiagnosticCheck(
             "Network policy",
             "ok",
-            "翻譯與 OBS Overlay 固定為 127.0.0.1；只有使用者明確按下模型下載時連線 Hugging Face",
+            "翻譯與 OBS Overlay 固定為 127.0.0.1；模型下載連線 Hugging Face；"
+            "開啟 About／檢查更新時連線 GitHub API",
         )
     )
     return checks

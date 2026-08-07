@@ -49,6 +49,15 @@ tagging a release.
 - Confirm the logo appears in the main window title bar and Windows taskbar.
 - Confirm the app still starts when installed from the Release ZIP rather than
   the Git checkout.
+- Confirm About displays the author and installed version without making a
+  request during normal startup.
+- Open About and confirm it finds the newest published Release, including a
+  GitHub Pre-release, without blocking the GUI.
+- Test current, update-available, local-newer, malformed-response, offline, and
+  timeout states. Confirm the failure states do not show a modal dialog or
+  interfere with local transcription.
+- Confirm the GitHub buttons open the expected HTTPS repository and Releases
+  pages, and no update is downloaded or installed automatically.
 
 ## Recognition and translation
 

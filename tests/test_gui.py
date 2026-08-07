@@ -1,3 +1,5 @@
+from packaging.version import Version
+
 from context_live_translator.config import AppConfig
 from context_live_translator.main_window import MainWindow
 from context_live_translator.models import (
@@ -6,6 +8,7 @@ from context_live_translator.models import (
     SegmentStatus,
     TranscriptSegment,
 )
+from context_live_translator.updates import ReleaseInfo
 
 
 def test_gui_has_standalone_translation_tabs(monkeypatch, qcore_app) -> None:
@@ -16,10 +19,14 @@ def test_gui_has_standalone_translation_tabs(monkeypatch, qcore_app) -> None:
         "模型與進階",
         "OBS Overlay",
         "診斷",
+        "About",
     ]
     assert window.timeline.objectName() == "timeline"
     assert window.target_combo.findData("__custom__") >= 0
     assert not window.windowIcon().isNull()
+    assert window.about_local_version.text().startswith("v0.3.4")
+    assert window.about_latest_version.text() == "尚未檢查"
+    assert window._update_reply is None  # noqa: SLF001
     window.controller.shutdown()
     window.deleteLater()
 
@@ -31,6 +38,27 @@ def test_gui_has_obs_browser_source_controls(monkeypatch, qcore_app) -> None:
     assert window.overlay_max_lines.value() == 3
     assert not window.overlay_show_source.isChecked()
     assert not window.overlay_preview.isEnabled()
+    window.controller.shutdown()
+    window.deleteLater()
+
+
+def test_about_page_displays_update_and_offline_states(monkeypatch, qcore_app) -> None:
+    monkeypatch.setattr("context_live_translator.main_window.list_audio_sources", lambda: [])
+    window = MainWindow(AppConfig())
+    window._show_update_release(  # noqa: SLF001
+        ReleaseInfo(
+            Version("0.3.5"),
+            "v0.3.5",
+            "https://github.com/aile-vtb/context-live-translator/releases/tag/v0.3.5",
+            True,
+            "",
+        )
+    )
+    assert window.about_latest_version.text() == "v0.3.5（Pre-release）"
+    assert "有新版本" in window.about_update_status.text()
+    window._show_update_error("offline")  # noqa: SLF001
+    assert window.about_latest_version.text() == "無法取得"
+    assert "不影響離線使用" in window.about_update_status.text()
     window.controller.shutdown()
     window.deleteLater()
 

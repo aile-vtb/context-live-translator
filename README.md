@@ -14,7 +14,7 @@ Context Live Translator 是一個 Windows 單機桌面程式：從明確選定�
 > revision, with an optional localhost WebSocket overlay for OBS Browser
 > Source. No cloud translation API is used.
 
-目前版本：`0.3.3`（alpha）
+目前版本：`0.3.4`（alpha）
 
 ## 特色與邊界
 
@@ -29,6 +29,8 @@ Context Live Translator 是一個 Windows 單機桌面程式：從明確選定�
 - 可選的 OBS Browser Source：本機 HTTP 頁面與 WebSocket 即時更新，回修時
   以相同 segment ID 更新原字幕，不新增重複列。
 - 所有處理預設在單機完成；執行期翻譯只連線到 `127.0.0.1`。
+- About 分頁會在使用者開啟時，以匿名請求檢查 GitHub 公開 Releases；只提示
+  是否有新版，不會自動下載或安裝。
 - 不包含直播平台 API、單一應用程式音訊擷取、自定義字典、雲端翻譯或
   人工字幕編輯。Browser Source 只負責顯示，不與平台帳號連線。
 
@@ -54,7 +56,7 @@ Whisper；`setup.ps1` 與一般啟動不會自動下載。
 ### 一般 Windows 使用者（不需要 Git）
 
 到 GitHub 的 [Releases](https://github.com/aile-vtb/context-live-translator/releases)
-下載 `ContextLiveTranslator-v0.3.3-Windows-Setup.zip`，完整解壓後閱讀
+下載 `ContextLiveTranslator-v0.3.4-Windows-Setup.zip`，完整解壓後閱讀
 [`README_FIRST.md`](README_FIRST.md)，再依序雙擊：
 
 1. `setup.cmd`：建立 Python 環境及安裝依賴；
@@ -257,6 +259,10 @@ v1 的辨識修正是文字上下文校正，不會重新解碼音訊。GUI tool
 項目會先鎖定再寫出。程式不會自動上傳音訊或文字。啟用 OBS Overlay 時，
 字幕會提供給本機 `127.0.0.1` Browser Source；使用者仍須確認自己有權擷取、
 處理與播出內容。
+
+About 分頁第一次開啟及使用者按下「重新檢查」時，會連線
+`api.github.com` 讀取本專案公開 Release 版本。請求不包含音訊、字幕、模型路徑
+或設定資料；無法連線時不影響離線翻譯。程式不會自動下載或安裝更新。
 
 ## 疑難排解
 

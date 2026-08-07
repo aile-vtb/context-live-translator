@@ -17,6 +17,7 @@ The application depends on, or can interoperate with, the following projects:
 | [NumPy](https://numpy.org/) | Numeric arrays | BSD-3-Clause |
 | [SciPy](https://scipy.org/) | Audio resampling | BSD-3-Clause |
 | [HTTPX](https://www.python-httpx.org/) | localhost HTTP client | BSD-3-Clause |
+| [packaging](https://github.com/pypa/packaging) | Application and Release version comparison | Apache-2.0 OR BSD-2-Clause |
 | [OpenCC](https://github.com/BYVoid/OpenCC) | Chinese conversion data and algorithms | Apache-2.0 |
 | [FastAPI](https://github.com/fastapi/fastapi) | Local overlay HTTP/WebSocket application | MIT |
 | [Uvicorn](https://github.com/Kludex/uvicorn) | Local ASGI server | BSD-3-Clause |

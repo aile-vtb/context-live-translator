@@ -17,7 +17,11 @@ The project does not distribute model weights. Model provenance, integrity,
 license terms, and acceptable-use restrictions remain the user's
 responsibility.
 
-The only built-in non-localhost network action is an explicit, user-confirmed
-Whisper model download from Hugging Face. Setup and normal application startup
-do not download weights. The download is staged and validated before it becomes
-the configured local model.
+Built-in non-localhost network actions are limited to an explicit,
+user-confirmed Whisper model download from Hugging Face and a read-only,
+anonymous request to GitHub's public Releases API when the About tab is first
+opened or the user clicks the refresh button. The update request does not
+include audio, transcripts, model paths, or application settings, and it never
+downloads or installs a release. Setup and normal application startup do not
+download weights. Model downloads are staged and validated before becoming the
+configured local model.

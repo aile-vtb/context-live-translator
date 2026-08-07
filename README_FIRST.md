@@ -115,6 +115,9 @@ Python runtime，下載約 1 GB。若不需要 Whisper GPU，請略過這個選�
 
 回到「即時翻譯」選擇目標語言，為每個音訊來源設定裝置與來源語言，就可以開始。
 
+「About」分頁會在開啟時連線 GitHub 公開 Releases 檢查版本，只顯示更新提示，
+不會上傳音訊或字幕，也不會自動下載或安裝更新。無法連線不影響離線使用。
+
 完整功能、OBS Browser Source、多裝置監聽與疑難排解請閱讀 [README.md](README.md)。
 
 若看到 `Library cublas64_12.dll is not found or cannot be loaded`，代表 DLL 雖可能
