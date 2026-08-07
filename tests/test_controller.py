@@ -7,6 +7,7 @@ from context_live_translator.config import AppConfig
 from context_live_translator.controller import AppController
 from context_live_translator.models import (
     AudioRouteConfig,
+    AudioSource,
     LanguageSpec,
     Recognition,
     RevisionItem,
@@ -160,6 +161,21 @@ def test_start_validation_rejects_empty_model_paths_even_in_existing_directory(
     assert error is not None
     assert "Whisper" in error
     controller.audio._input_stream = None  # noqa: SLF001
+
+
+def test_monitor_route_formats_audio_source_status_without_i18n_collision(
+    monkeypatch, qcore_app
+) -> None:
+    route = AudioRouteConfig(id="main", label="音訊來源 1")
+    controller = AppController(AppConfig(audio_routes=[route]))
+    source = AudioSource("input", "1", "ADAT 3+4", "ASIO", 2, 48000)
+    statuses: list[str] = []
+    controller.status_changed.connect(statuses.append)
+    monkeypatch.setattr(controller.audio, "open_route", lambda route, source: None)
+
+    controller.monitor_route("main", source)
+
+    assert statuses == ["正在監聽「音訊來源 1」：ADAT 3+4"]
 
 
 def test_start_validation_rejects_overlay_llama_port_collision(qcore_app) -> None:

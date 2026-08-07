@@ -14,7 +14,7 @@ Context Live Translator 是一個 Windows 單機桌面程式：從明確選定�
 > revision, with an optional localhost WebSocket overlay for OBS Browser
 > Source. No cloud translation API is used.
 
-目前版本：`0.3.5`（alpha）
+目前版本：`0.3.6`（alpha）
 
 ## 特色與邊界
 
@@ -58,7 +58,7 @@ Whisper；`setup.ps1` 與一般啟動不會自動下載。
 ### 一般 Windows 使用者（不需要 Git）
 
 到 GitHub 的 [Releases](https://github.com/aile-vtb/context-live-translator/releases)
-下載 `ContextLiveTranslator-v0.3.5-Windows-Setup.zip`，完整解壓後閱讀
+下載 `ContextLiveTranslator-v0.3.6-Windows-Setup.zip`，完整解壓後閱讀
 [`README_FIRST.md`](README_FIRST.md)，再依序雙擊：
 
 1. `setup.cmd`：建立 Python 環境及安裝依賴；

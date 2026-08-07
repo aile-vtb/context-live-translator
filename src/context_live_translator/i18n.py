@@ -601,8 +601,8 @@ def current_ui_language() -> str:
     return _current_language
 
 
-def tr(source: str, **values: object) -> str:
-    translated = CATALOGS.get(_current_language, {}).get(source, source)
+def tr(template: str, **values: object) -> str:
+    translated = CATALOGS.get(_current_language, {}).get(template, template)
     return translated.format(**values) if values else translated
 
 
